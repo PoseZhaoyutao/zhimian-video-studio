@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimian.local/schemas/manifest.schema.json",
+  "title": "ZhiMian production manifest",
+  "type": "object",
+  "required": ["schema_version", "date", "version", "status", "stage"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "date": {"type": "string", "format": "date"},
+    "version": {"type": "integer", "minimum": 1},
+    "status": {
+      "type": "string",
+      "enum": ["in_progress", "success", "failed", "dry_run"]
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "planned", "researched", "scripted", "voiced", "timed",
+        "rendered", "copied", "verified", "delivered"
+      ]
+    },
+    "topic": {"type": "object"},
+    "updated_at": {"type": "string"},
+    "errors": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

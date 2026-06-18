@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "date": "2026-06-18",
+  "version": 1,
+  "status": "dry_run",
+  "stage": "verified",
+  "updated_at": "2026-06-18T08:04:01.897560+00:00",
+  "topic": {
+    "day": 18,
+    "column": "AI×求职",
+    "title": "用AI练习算法题，而不是直接抄答案"
+  },
+  "mode": "manual",
+  "qa_passed": true
+}

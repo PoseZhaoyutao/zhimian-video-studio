@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.pytest-tmp/
+.venv/
+venv/
+
+# Node / Remotion
+node_modules/
+.remotion/
+remotion/public/generated/
+
+# Production artifacts
+outputs/
+dist/
+tmp/
+tmp_*/
+*.log
+
+# Local machine state
+.env
+.DS_Store
+Thumbs.db
+npm-cache/

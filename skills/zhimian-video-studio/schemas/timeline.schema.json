@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zhimian.local/schemas/timeline.schema.json",
+  "title": "ZhiMian audio-driven timeline",
+  "type": "object",
+  "required": ["schema_version", "fps", "scenes"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "fps": {"type": "integer", "minimum": 1},
+    "scenes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id", "narration", "audio_duration", "start_frame",
+          "duration_in_frames", "end_frame"
+        ],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "narration": {"type": "string", "minLength": 1},
+          "audio_duration": {"type": "number", "exclusiveMinimum": 0},
+          "start_frame": {"type": "integer", "minimum": 0},
+          "duration_in_frames": {"type": "integer", "minimum": 1},
+          "end_frame": {"type": "integer", "minimum": 1},
+          "on_screen_text": {"type": "string"},
+          "caption": {"type": "string"},
+          "visual_type": {"type": "string"},
+          "visual_payload": {},
+          "animation": {"type": "string"},
+          "source_refs": {"type": "array", "items": {"type": "string"}},
+          "audio_file": {"type": "string"}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

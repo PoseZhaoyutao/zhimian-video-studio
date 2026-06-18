@@ -1,0 +1,25 @@
+{
+  "name": "zhimian-remotion",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "remotion studio src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "compositions": "remotion compositions src/index.ts",
+    "render": "remotion render src/index.ts ZhiMianVideo ../outputs/rendered.mp4 --codec=h264",
+    "cover": "remotion still src/index.ts ZhiMianCover ../outputs/cover.png"
+  },
+  "dependencies": {
+    "@remotion/captions": "4.0.479",
+    "@remotion/cli": "4.0.479",
+    "@remotion/layout-utils": "4.0.479",
+    "@remotion/media": "4.0.479",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "remotion": "4.0.479",
+    "typescript": "6.0.3",
+    "zod": "4.3.6"
+  }
+}

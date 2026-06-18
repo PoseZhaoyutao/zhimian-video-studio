@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "fps": 30,
+  "scenes": [
+    {
+      "id": "hook",
+      "narration": "面试官问：用AI练习算法题，而不是直接抄答案",
+      "on_screen_text": "用AI练习算法题，而不是直接抄答案",
+      "caption": "用AI练习算法题，而不是直接抄答案",
+      "visual_type": "editorial",
+      "source_refs": [
+        "S1"
+      ],
+      "audio_duration": 10.0,
+      "audio_file": "generated/2026-06-18/01.wav",
+      "start_frame": 0,
+      "duration_in_frames": 300,
+      "end_frame": 300,
+      "start_seconds": 0.0,
+      "end_seconds": 10.0
+    },
+    {
+      "id": "intuition",
+      "narration": "先给一个直觉，再解释底层原因。",
+      "on_screen_text": "先给直觉，再讲原理",
+      "caption": "先给一个直觉，再解释底层原因。",
+      "visual_type": "process",
+      "visual_payload": {
+        "steps": [
+          "问题",
+          "直觉",
+          "原理"
+        ]
+      },
+      "source_refs": [
+        "S1"
+      ],
+      "audio_duration": 10.0,
+      "audio_file": "generated/2026-06-18/02.wav",
+      "start_frame": 300,
+      "duration_in_frames": 300,
+      "end_frame": 600,
+      "start_seconds": 10.0,
+      "end_seconds": 20.0
+    },
+    {
+      "id": "principle",
+      "narration": "把概念拆成输入、过程和输出。",
+      "on_screen_text": "输入 → 过程 → 输出",
+      "caption": "把概念拆成输入、过程和输出。",
+      "visual_type": "process",
+      "visual_payload": {
+        "steps": [
+          "输入",
+          "过程",
+          "输出"
+        ]
+      },
+      "source_refs": [
+        "S1"
+      ],
+      "audio_duration": 10.0,
+      "audio_file": "generated/2026-06-18/03.wav",
+      "start_frame": 600,
+      "duration_in_frames": 300,
+      "end_frame": 900,
+      "start_seconds": 20.0,
+      "end_seconds": 30.0
+    },
+    {
+      "id": "followups",
+      "narration": "真正拉开差距的是连续追问。",
+      "on_screen_text": "追问链决定上限",
+      "caption": "真正拉开差距的是连续追问。",
+      "visual_type": "code",
+      "visual_payload": {
+        "code": "Q1: 为什么这样设计？\nQ2: 复杂度是多少？\nQ3: 边界情况呢？"
+      },
+      "source_refs": [
+        "S1"
+      ],
+      "audio_duration": 10.0,
+      "audio_file": "generated/2026-06-18/04.wav",
+      "start_frame": 900,
+      "duration_in_frames": 300,
+      "end_frame": 1200,
+      "start_seconds": 30.0,
+      "end_seconds": 40.0
+    },
+    {
+      "id": "answer",
+      "narration": "高分回答要按结论、原理、取舍和落地四步说。",
+      "on_screen_text": "结论 · 原理 · 取舍 · 落地",
+      "caption": "高分回答要按结论、原理、取舍和落地四步说。",
+      "visual_type": "process",
+      "visual_payload": {
+        "steps": [
+          "结论",
+          "原理",
+          "取舍",
+          "落地"
+        ]
+      },
+      "source_refs": [
+        "S1"
+      ],
+      "audio_duration": 10.0,
+      "audio_file": "generated/2026-06-18/05.wav",
+      "start_frame": 1200,
+      "duration_in_frames": 300,
+      "end_frame": 1500,
+      "start_seconds": 40.0,
+      "end_seconds": 50.0
+    },
+    {
+      "id": "mistake",
+      "narration": "不要背标准答案，要解释为什么。",
+      "on_screen_text": "别背答案，讲为什么",
+      "caption": "不要背标准答案，要解释为什么。",
+      "visual_type": "editorial",
+      "source_refs": [
+        "S1"
+      ],
+      "audio_duration": 10.0,
+      "audio_file": "generated/2026-06-18/06.wav",
+      "start_frame": 1500,
+      "duration_in_frames": 300,
+      "end_frame": 1800,
+      "start_seconds": 50.0,
+      "end_seconds": 60.0
+    }
+  ]
+}
