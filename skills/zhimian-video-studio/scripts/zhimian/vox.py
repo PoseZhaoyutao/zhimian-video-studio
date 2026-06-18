@@ -10,7 +10,10 @@ from typing import Any, Callable
 import numpy as np
 
 
-DEFAULT_VOICE_PROMPT = os.environ.get("VOXCPM2_VOICE_PROMPT", "清晰、中性、轻快、技术讲解感，停顿自然")
+DEFAULT_VOICE_PROMPT = os.environ.get(
+    "VOXCPM2_VOICE_PROMPT",
+    "专业男性解说主播，清晰沉稳，有亲和力，适合科普与行业推广，停顿自然",
+)
 DEFAULT_MODEL_SOURCE = os.environ.get("VOXCPM2_MODEL_SOURCE", "openbmb/VoxCPM2")
 DEFAULT_PROJECT_PATH = Path(os.environ.get("VOXCPM2_PROJECT", r"D:\Project\VoxCPM2\VoxCPM"))
 

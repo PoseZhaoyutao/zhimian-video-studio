@@ -1,6 +1,6 @@
 # 智面引擎 · ZhiMian Video Studio
 
-> 一个面向“AI 使用技巧 × 大厂技术面试拆招”的本地优先短视频生产 Skill：从选题、脚本、VoxCPM2 配音、Remotion 竖屏动画、封面、平台文案到 QA 审核包，按日期沉淀为可复查的内容资产。
+> 一个面向“AI 使用技巧 × 大厂技术面试拆招”的本地优先短视频生产 Skill：从选题、脚本、模型生图、VoxCPM2 男解说主播配音、Remotion 竖屏动画、封面、平台文案到 QA 审核包，按日期沉淀为可复查的内容资产。
 
 ![智面引擎封面预览](demo/media/cover.png)
 
@@ -12,6 +12,7 @@
 - 内容规划：既能先生成某个时间段的 `content-plan.json`，也能直接指定一个主题立刻生产。
 - 视频形态：统一 9:16 竖屏，适配小红书、抖音、B站竖屏。
 - 动画表达：Remotion 时间轴支持流程流动、左右对比、公式揭示、代码卡片和动态背景，不只是文字翻页。
+- 生图表达：每期默认选择 2–4 个关键镜头调用模型生图，并由 Remotion 加入裁切、揭示和缓慢镜头运动；生图失败时自动回退到纯动效镜头。
 - 生产节奏：支持 17:00 自动生产、19:00 审核交付，也支持手动立即触发。
 - 输出资产：每次生产落到 `outputs/YYYY-MM-DD/`，保留视频、封面、配音、文案、来源、时间轴、QA 报告。
 - 安全边界：默认合成技术讲解音色；不自动发布；不伪造来源；不做未经授权的真人声音克隆。
@@ -103,7 +104,9 @@ python skills/zhimian-video-studio/scripts/run_daily.py `
   --rebuild
 ```
 
-> 当前实现会先生成 VoxCPM2 分段 WAV，再把分段音频复制到 Remotion `public/generated/YYYY-MM-DD/`，写出 `script/remotion-props.json`，最后渲染 `video/final-9x16.mp4` 和 `cover/cover-9x16.png`。
+> 当前实现会先打包模型生成图片并生成 VoxCPM2 分段 WAV，再把图片和音频复制到 Remotion `public/generated/YYYY-MM-DD/`，写出 `script/remotion-props.json`，最后渲染 `video/final-9x16.mp4` 和 `cover/cover-9x16.png`。
+
+模型生图由 Codex/模型侧工具完成。把场景 id、图片路径、替代文本和提示词写入 `image-map.json`，真实生产命令增加 `--image-map staging/image-map.json` 即可。详细规范见 [`generative-visuals.md`](skills/zhimian-video-studio/references/generative-visuals.md)。
 
 ## 输出目录
 
@@ -115,6 +118,8 @@ outputs/YYYY-MM-DD/
 ├── script/timeline.md
 ├── script/timeline.json
 ├── script/remotion-props.json
+├── assets/image-plan.json
+├── assets/generated/*.{png,jpg,jpeg,webp}
 ├── audio/segments/*.wav
 ├── audio/narration.wav
 ├── video/final-9x16.mp4
@@ -179,7 +184,7 @@ $env:ZHIMIAN_REPO_ROOT = $repo
 ```powershell
 $env:VOXCPM2_PROJECT = "D:\Project\VoxCPM2\VoxCPM"
 $env:VOXCPM2_MODEL_SOURCE = "openbmb/VoxCPM2"
-$env:VOXCPM2_VOICE_PROMPT = "清晰、中性、轻快、技术讲解感，停顿自然"
+$env:VOXCPM2_VOICE_PROMPT = "专业男性解说主播，清晰沉稳，有亲和力，适合科普与行业推广，停顿自然"
 ```
 
 默认策略是“AI 设计合成音色”。如果要使用参考音频做真人声线克隆，必须显式传入授权参数；当前适配器会拒绝未授权的 voice clone。

@@ -16,7 +16,7 @@ def test_skill_exists_and_is_discoverable():
 
 def test_skill_declares_required_output_contract():
     text = SKILL.read_text(encoding="utf-8")
-    for required in ["VoxCPM2", "Remotion", "timeline.json", "outputs/YYYY-MM-DD", "content-plan.json", "flow", "comparison", "formula"]:
+    for required in ["VoxCPM2", "Remotion", "timeline.json", "outputs/YYYY-MM-DD", "content-plan.json", "flow", "comparison", "formula", "image generation", "assets/image-plan.json", "2–4"]:
         assert required in text
 
 
@@ -35,6 +35,7 @@ def test_required_reference_files_exist():
         "references/content-calendar.md",
         "references/editorial-style.md",
         "references/visual-system.md",
+        "references/generative-visuals.md",
         "schemas/timeline.schema.json",
         "schemas/manifest.schema.json",
     ]:
@@ -48,5 +49,16 @@ def test_skill_keeps_safety_and_delivery_boundaries():
         "未经明确授权不得克隆真人音色",
         "不得伪造来源",
         "质量检查失败不得宣称成功",
+    ]:
+        assert required in text
+
+
+def test_skill_defaults_to_male_narration_and_generated_visuals_with_fallback():
+    text = SKILL.read_text(encoding="utf-8")
+    for required in [
+        "professional male",
+        "2–4",
+        "image-generation tool",
+        "motion-only fallback",
     ]:
         assert required in text

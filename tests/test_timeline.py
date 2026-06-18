@@ -44,6 +44,8 @@ def test_timeline_and_manifest_schemas_require_core_fields():
     )
 
     assert {"fps", "scenes"}.issubset(timeline_schema["required"])
+    scene_properties = timeline_schema["properties"]["scenes"]["items"]["properties"]
+    assert {"image_file", "image_alt", "image_prompt"}.issubset(scene_properties)
     assert {"date", "status", "stage", "version"}.issubset(
         manifest_schema["required"]
     )
