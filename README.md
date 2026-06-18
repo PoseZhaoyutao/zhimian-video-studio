@@ -26,7 +26,7 @@
 ## 30 秒快速开始
 
 ```powershell
-git clone <your-repo-url> zhimian-video-studio
+git clone https://github.com/PoseZhaoyutao/zhimian-video-studio.git zhimian-video-studio
 cd zhimian-video-studio
 
 python -m venv .venv
