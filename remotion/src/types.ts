@@ -8,7 +8,7 @@ export const sceneSchema = z.object({
   narration: z.string(),
   onScreenText: z.string(),
   caption: z.string(),
-  visualType: z.enum(["editorial", "code", "process"]),
+  visualType: z.enum(["editorial", "code", "process", "flow", "comparison", "formula"]),
   visualPayload: z.record(z.string(), z.unknown()).default({}),
   audioFile: z.string().optional(),
 });

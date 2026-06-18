@@ -2,6 +2,10 @@ import {AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig} from
 import {categoryColor, COLORS, FONT_FAMILY, SAFE_MARGIN_BOTTOM, SAFE_MARGIN_TOP, SAFE_MARGIN_X} from "../design";
 import type {Scene} from "../types";
 import {CodeCard} from "./CodeCard";
+import {ComparisonPanel} from "./ComparisonPanel";
+import {FlowDiagram} from "./FlowDiagram";
+import {FormulaReveal} from "./FormulaReveal";
+import {MotionBackdrop} from "./MotionBackdrop";
 import {ProcessDiagram} from "./ProcessDiagram";
 
 export const EditorialFrame: React.FC<{scene: Scene; column: string; title: string}> = ({scene, column, title}) => {
@@ -13,6 +17,7 @@ export const EditorialFrame: React.FC<{scene: Scene; column: string; title: stri
 
   return (
     <AbsoluteFill style={{backgroundColor: COLORS.cream, color: COLORS.ink, fontFamily: FONT_FAMILY}}>
+      <MotionBackdrop accent={accent} />
       <div style={{position: "absolute", top: SAFE_MARGIN_TOP, left: SAFE_MARGIN_X, right: SAFE_MARGIN_X, display: "flex", justifyContent: "space-between", fontSize: 30, fontWeight: 800}}>
         <span style={{color: accent}}>{column}</span>
         <span style={{color: COLORS.muted}}>智面引擎</span>
@@ -23,6 +28,9 @@ export const EditorialFrame: React.FC<{scene: Scene; column: string; title: stri
         <div style={{marginTop: 70}}>
           {scene.visualType === "code" ? <CodeCard payload={scene.visualPayload} accent={accent} /> : null}
           {scene.visualType === "process" ? <ProcessDiagram payload={scene.visualPayload} accent={accent} /> : null}
+          {scene.visualType === "flow" ? <FlowDiagram payload={scene.visualPayload} accent={accent} /> : null}
+          {scene.visualType === "comparison" ? <ComparisonPanel payload={scene.visualPayload} accent={accent} /> : null}
+          {scene.visualType === "formula" ? <FormulaReveal payload={scene.visualPayload} accent={accent} /> : null}
           {scene.visualType === "editorial" ? <div style={{height: 16, width: `${Math.min(100, 20 + frame)}%`, backgroundColor: accent, marginTop: 70}} /> : null}
         </div>
       </div>

@@ -25,7 +25,7 @@
           "end_frame": {"type": "integer", "minimum": 1},
           "on_screen_text": {"type": "string"},
           "caption": {"type": "string"},
-          "visual_type": {"type": "string"},
+          "visual_type": {"enum": ["editorial", "code", "process", "flow", "comparison", "formula"]},
           "visual_payload": {},
           "animation": {"type": "string"},
           "source_refs": {"type": "array", "items": {"type": "string"}},

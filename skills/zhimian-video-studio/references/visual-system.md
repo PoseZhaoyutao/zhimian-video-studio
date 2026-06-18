@@ -21,4 +21,11 @@
 - Do not use CSS transitions, CSS animations, or Tailwind animation classes.
 - One concept per scene. Use process animation when explaining calculations or data flow.
 - Use red for interview/alert/failure concepts; blue for AI/process/tool concepts.
+- Do not produce a video that is only text cards. Each production should include at least two motion templates:
+  - `flow`: steps connected by an animated line or moving signal.
+  - `comparison`: two options/cards enter separately, then the stronger answer wins.
+  - `formula`: concepts reveal as tokens and the final mental model is highlighted.
+  - `process`: numbered steps appear sequentially.
+  - `code`: technical follow-up or pseudo-code reveals as a card.
+- Background motion should be subtle: low-opacity shapes, sweeps, pulses, or particles that guide attention without competing with captions.
 

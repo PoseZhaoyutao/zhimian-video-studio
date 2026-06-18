@@ -18,3 +18,6 @@ def test_cli_help_lists_manual_and_rebuild_modes():
     assert "--date" in result.stdout
     assert "--rebuild" in result.stdout
     assert "--dry-run" in result.stdout
+    assert "--make-plan" in result.stdout
+    assert "--topic" in result.stdout
+    assert "--plan-file" in result.stdout

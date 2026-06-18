@@ -53,6 +53,19 @@ def test_animations_are_frame_driven_not_css_driven():
     assert "animation:" not in sources
 
 
+def test_motion_templates_are_available_for_non_text_scenes():
+    sources = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (REMOTION / "src").rglob("*.tsx")
+    )
+    for required in ["MotionBackdrop", "FlowDiagram", "ComparisonPanel", "FormulaReveal"]:
+        assert required in sources
+
+    types = (REMOTION / "src" / "types.ts").read_text(encoding="utf-8")
+    for visual_type in ['"flow"', '"comparison"', '"formula"']:
+        assert visual_type in types
+
+
 def test_remotion_props_convert_python_timeline_to_component_contract():
     props = _remotion_props(
         {"day": 1, "column": "大厂拆招·算法", "title": "Attention为什么除以√d"},
@@ -66,7 +79,7 @@ def test_remotion_props_convert_python_timeline_to_component_contract():
                 "narration": "面试官问 Attention",
                 "on_screen_text": "Attention",
                 "caption": "面试官问 Attention",
-                "visual_type": "editorial",
+                "visual_type": "flow",
                 "visual_payload": {},
                 "audio_file": "generated/2026-06-18/01.wav",
             }
@@ -77,7 +90,7 @@ def test_remotion_props_convert_python_timeline_to_component_contract():
     assert props["scenes"][0]["startFrame"] == 0
     assert props["scenes"][0]["durationInFrames"] == 90
     assert props["scenes"][0]["onScreenText"] == "Attention"
-    assert props["scenes"][0]["visualType"] == "editorial"
+    assert props["scenes"][0]["visualType"] == "flow"
     assert props["scenes"][0]["audioFile"] == "generated/2026-06-18/01.wav"
     assert props["captions"][0]["startMs"] == 0
     assert props["captions"][0]["endMs"] == 3000

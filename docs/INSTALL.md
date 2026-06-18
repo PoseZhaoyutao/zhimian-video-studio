@@ -91,6 +91,42 @@ python skills/zhimian-video-studio/scripts/run_daily.py `
   --mode manual
 ```
 
+## 内容规划与指定主题
+
+生成一段时间的内容规划草稿：
+
+```powershell
+python skills/zhimian-video-studio/scripts/run_daily.py `
+  --make-plan `
+  --plan-start 2026-07-01 `
+  --plan-days 14 `
+  --plan-theme "AI工具与技术面试" `
+  --plan-output plans
+```
+
+使用规划文件生产某天内容：
+
+```powershell
+python skills/zhimian-video-studio/scripts/run_daily.py `
+  --date 2026-07-03 `
+  --plan-file plans/2026-07-01_to_2026-07-14/content-plan.json `
+  --output-root outputs `
+  --mode manual
+```
+
+直接指定主题生产：
+
+```powershell
+python skills/zhimian-video-studio/scripts/run_daily.py `
+  --date 2026-07-03 `
+  --topic "如何用AI审查后端系统设计方案" `
+  --column "AI实操" `
+  --output-root outputs `
+  --mode manual
+```
+
+这些入口都会走同一条音频驱动流程。Remotion 渲染层会根据 `timeline.json` 的 `visual_type` 选择流程、对比、公式、代码等动作模板，避免纯文字翻页。
+
 如果当天已经有成功产物，命令会复用日期锁。需要重做时加 `--rebuild`：
 
 ```powershell

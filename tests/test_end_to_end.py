@@ -50,15 +50,44 @@ def test_cli_dry_run_creates_complete_dated_package(tmp_path: Path):
     manifest = json.loads((day / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["status"] == "dry_run"
     assert manifest["stage"] == "verified"
-    assert manifest["topic"]["title"] == "用AI练习算法题，而不是直接抄答案"
+    assert manifest["topic"]["title"] == "短视频推荐流如何拆成召回、排序、重排"
 
     timeline = json.loads((day / "script" / "timeline.json").read_text(encoding="utf-8"))
     assert timeline["fps"] == 30
     assert len(timeline["scenes"]) >= 6
     assert all(scene["duration_in_frames"] > 0 for scene in timeline["scenes"])
+    assert {"comparison", "flow", "formula"}.issubset({scene["visual_type"] for scene in timeline["scenes"]})
 
     report = json.loads((day / "qa" / "report.json").read_text(encoding="utf-8"))
     assert report["passed"] is True
+
+
+def test_cli_dry_run_accepts_custom_topic(tmp_path: Path):
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(CLI),
+            "--date",
+            "2026-07-03",
+            "--output-root",
+            str(tmp_path),
+            "--topic",
+            "如何用AI审查后端系统设计方案",
+            "--column",
+            "AI实操",
+            "--dry-run",
+            "--skip-audio",
+            "--skip-render",
+        ],
+        text=True,
+        capture_output=True,
+        encoding="utf-8",
+    )
+
+    assert result.returncode == 0, result.stderr
+    manifest = json.loads((tmp_path / "2026-07-03" / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["topic"]["title"] == "如何用AI审查后端系统设计方案"
+    assert manifest["topic"]["column"] == "AI实操"
 
 
 def test_cli_rebuild_creates_versioned_folder(tmp_path: Path):

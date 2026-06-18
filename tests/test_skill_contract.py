@@ -10,13 +10,13 @@ def test_skill_exists_and_is_discoverable():
     assert text.startswith("---\nname: zhimian-video-studio\n")
     frontmatter = text.split("---", 2)[1]
     assert "description: Use when" in frontmatter
-    for trigger in ["生成今天的视频", "调用AI科普视频Skill", "重做今天的视频"]:
+    for trigger in ["生成今天的视频", "规划未来一周内容", "指定主题生成视频", "调用AI科普视频Skill", "重做今天的视频"]:
         assert trigger in text
 
 
 def test_skill_declares_required_output_contract():
     text = SKILL.read_text(encoding="utf-8")
-    for required in ["VoxCPM2", "Remotion", "timeline.json", "outputs/YYYY-MM-DD"]:
+    for required in ["VoxCPM2", "Remotion", "timeline.json", "outputs/YYYY-MM-DD", "content-plan.json", "flow", "comparison", "formula"]:
         assert required in text
 
 
