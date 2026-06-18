@@ -12,6 +12,7 @@ from datetime import date
 from pathlib import Path
 
 from zhimian.calendar import topic_for_day
+from zhimian.images import package_scene_images
 from zhimian.planner import custom_topic, generate_content_plan, load_plan_topic, write_content_plan
 from zhimian.qa import run_qa
 from zhimian.remotion import build_render_command, build_still_command
@@ -83,6 +84,21 @@ def _stage_static_audio(output_dir: Path, remotion_root: Path, run_date: str, sc
         scene["audio_file"] = f"generated/{run_date}/{source.name}"
 
 
+def _stage_static_images(output_dir: Path, remotion_root: Path, run_date: str, scenes: list[dict]) -> None:
+    public_dir = remotion_root / "public" / "generated" / run_date / "images"
+    for scene in scenes:
+        image_file = scene.get("image_file")
+        if not image_file:
+            continue
+        source = output_dir / str(image_file)
+        if not source.is_file():
+            raise FileNotFoundError(source)
+        public_dir.mkdir(parents=True, exist_ok=True)
+        target = public_dir / source.name
+        shutil.copy2(source, target)
+        scene["image_static_file"] = f"generated/{run_date}/images/{target.name}"
+
+
 def _remotion_props(topic: dict[str, str | int], scenes: list[dict]) -> dict:
     remotion_scenes = []
     captions = []
@@ -98,6 +114,9 @@ def _remotion_props(topic: dict[str, str | int], scenes: list[dict]) -> dict:
                 "visualType": scene.get("visual_type", "editorial"),
                 "visualPayload": scene.get("visual_payload") or {},
                 "audioFile": scene.get("audio_file"),
+                "imageFile": scene.get("image_static_file", scene.get("image_file")),
+                "imageAlt": scene.get("image_alt"),
+                "imagePrompt": scene.get("image_prompt"),
             }
         )
         captions.append(
@@ -110,22 +129,24 @@ def _remotion_props(topic: dict[str, str | int], scenes: list[dict]) -> dict:
             }
         )
     return {
-        "title": str(topic["title"]),
+        "title": _topic_display_title(topic),
         "column": str(topic["column"]),
         "episode": f"EP.{int(topic['day']):02d}",
-        "benefit": "60 秒拆出面试官真正想追问的技术细节",
+        "benefit": _topic_benefit(topic),
         "scenes": remotion_scenes,
         "captions": captions,
     }
 
 
 def _render_remotion(output_dir: Path, run_date: str, topic: dict[str, str | int], scenes: list[dict]) -> None:
+    output_dir = output_dir.resolve()
     repo_root = _repo_root()
     remotion_root = repo_root / "remotion"
     entry = remotion_root / "src" / "index.ts"
     remotion_bin = _remotion_bin(remotion_root)
 
     _stage_static_audio(output_dir, remotion_root, run_date, scenes)
+    _stage_static_images(output_dir, remotion_root, run_date, scenes)
     props_path = output_dir / "script" / "remotion-props.json"
     _write_json(props_path, _remotion_props(topic, scenes))
 
@@ -156,6 +177,63 @@ def _render_remotion(output_dir: Path, run_date: str, topic: dict[str, str | int
 
 def _draft_scenes(topic: dict[str, str | int]) -> list[dict]:
     title = str(topic["title"])
+    if _is_skill_recommendation_topic(topic):
+        return [
+            {
+                "id": "hook",
+                "narration": f"我在抖音和小红书新建了一个 AI 优质技能推荐合集。第一条，就从 {title} 讲起：推荐工具不是晒收藏，而是看它能不能真的帮你交付。",
+                "on_screen_text": "AI 优质技能推荐合集",
+                "caption": "推荐工具，不是晒收藏，而是看能不能交付。",
+                "visual_type": "comparison",
+                "visual_payload": {"left": "只晒工具", "right": "交付工作流", "winner": "right"},
+                "source_refs": ["S1", "S3"],
+            },
+            {
+                "id": "pipeline",
+                "narration": "为什么从智面引擎开始？因为它把一条科普视频拆成五步：选题和来源，脚本，VoxCPM2 本地配音，Remotion 程序化画面，最后做 QA 审核。",
+                "on_screen_text": "一条视频 = 五步交付",
+                "caption": "选题、脚本、配音、画面、QA，缺一环都不稳。",
+                "visual_type": "flow",
+                "visual_payload": {"steps": ["选题/来源", "脚本", "VoxCPM2", "Remotion", "QA"]},
+                "source_refs": ["S1", "S3", "S5"],
+            },
+            {
+                "id": "why_it_works",
+                "narration": "Remotion 的优势，是把字幕、动画、封面和竖屏模板都写进代码；同一个结构，可以批量改选题、改文案、改视觉，而不是每次从零剪。",
+                "on_screen_text": "Remotion：把视频模板写进代码",
+                "caption": "程序化视频，适合批量、可复用、可检查。",
+                "visual_type": "formula",
+                "visual_payload": {"tokens": ["专业问题", "+", "模板动画", "+", "自动字幕", "=", "稳定短视频"]},
+                "source_refs": ["S1", "S2"],
+            },
+            {
+                "id": "local_voice",
+                "narration": "VoxCPM2 放在本地跑，能减少反复调用外部语音服务的成本；官方也支持自然语言设计声音。我们默认用合成声音，不克隆真人音色。",
+                "on_screen_text": "本地配音：控成本，也控风格",
+                "caption": "本地生成，合成声音，成本和风格都更可控。",
+                "visual_type": "process",
+                "visual_payload": {"steps": ["写口播", "本地生成", "测时长", "驱动画面"]},
+                "source_refs": ["S3", "S4"],
+            },
+            {
+                "id": "industry_service",
+                "narration": "这个合集的原则很简单：我会推广自己做的技能，但每一期都要让你能迁移到自己的行业。医生讲科普，老师做课程，设计师讲案例，老板讲产品，都可以套这条线。",
+                "on_screen_text": "让每个行业都能讲清楚自己",
+                "caption": "推广自己的技能，也要服务大家的行业表达。",
+                "visual_type": "code",
+                "visual_payload": {"code": "行业问题 -> 可信来源\n听得懂脚本 -> 可传播画面\n一次成片 -> 可复用流程"},
+                "source_refs": ["S5"],
+            },
+            {
+                "id": "cta",
+                "narration": "以后我推荐 AI 技能，就看四件事：省不省重复劳动，留不留可复查文件，能不能本地化控成本，能不能改造成你的工作流。你想看哪个行业，评论区告诉我。",
+                "on_screen_text": "好技能 = 能迁移到你的工作",
+                "caption": "你想看哪个行业？评论区告诉我。",
+                "visual_type": "comparison",
+                "visual_payload": {"left": "只能演示", "right": "能迁移", "winner": "right"},
+                "source_refs": ["S5"],
+            },
+        ]
     angle = str(topic.get("angle") or "把一个具体问题拆成可验证、可复用、可追问的回答框架。")
     return [
         {"id": "hook", "narration": f"今天拆一个高频问题：{title}。别只背答案，我们要看面试官真正想追问什么。", "on_screen_text": title, "caption": title, "visual_type": "comparison", "visual_payload": {"left": "背答案", "right": "讲机制", "winner": "right"}, "source_refs": ["S1"]},
@@ -167,8 +245,75 @@ def _draft_scenes(topic: dict[str, str | int]) -> list[dict]:
     ]
 
 
+def _is_skill_recommendation_topic(topic: dict[str, str | int]) -> bool:
+    text = f"{topic.get('title', '')} {topic.get('column', '')}".lower()
+    keywords = ("技能推荐", "优质技能", "智面引擎", "行业推广", "科普视频")
+    return any(keyword.lower() in text for keyword in keywords)
+
+
+def _topic_benefit(topic: dict[str, str | int]) -> str:
+    if _is_skill_recommendation_topic(topic):
+        return "把好用 AI 技能变成行业科普生产线"
+    return "60 秒拆出面试官真正想追问的技术细节"
+
+
+def _topic_display_title(topic: dict[str, str | int]) -> str:
+    if _is_skill_recommendation_topic(topic):
+        return "AI技能推荐：智面引擎"
+    return str(topic["title"])
+
+
+def _write_sources(output_dir: Path, topic: dict[str, str | int]) -> None:
+    if _is_skill_recommendation_topic(topic):
+        _write(
+            output_dir / "research" / "sources.md",
+            "\n".join(
+                [
+                    "[S1] Remotion official documentation, `Creating a new project`: https://www.remotion.dev/docs/",
+                    "[S2] Remotion API documentation, `useCurrentFrame`, `interpolate`, and `spring`: https://www.remotion.dev/docs/use-current-frame ; https://www.remotion.dev/docs/interpolate ; https://www.remotion.dev/docs/spring",
+                    "[S3] OpenBMB/VoxCPM official repository: https://github.com/OpenBMB/VoxCPM",
+                    "[S4] VoxCPM2 Technical Report: https://arxiv.org/abs/2606.06928",
+                    "[S5] Local ZhiMian Video Studio design and production contract in this repository.",
+                ]
+            )
+            + "\n",
+        )
+        return
+    _write(output_dir / "research" / "sources.md", "[S1] 待替换为当天官方文档、论文或权威源码。\n")
+
+
 def _write_platform_copy(output_dir: Path, topic: dict[str, str | int]) -> None:
     title = str(topic["title"])
+    if _is_skill_recommendation_topic(topic):
+        copies = {
+            "xiaohongshu.md": (
+                f"# AI优质技能推荐｜{title}\n\n"
+                "问题：很多人收藏了 AI 工具，但不知道怎么变成自己的内容生产力。\n\n"
+                "步骤：\n"
+                "1. 用智面引擎先把选题、来源、脚本、时间线拆开。\n"
+                "2. 用本地 VoxCPM2 生成合成配音，减少反复调用成本。\n"
+                "3. 用 Remotion 把字幕、封面、流程动画做成可复用模板。\n"
+                "4. 最后做 QA，再发到抖音/小红书合集。\n\n"
+                "结论：好技能不是炫技，而是能迁移到你的行业。\n\n"
+                "标签：#AI工具 #AI技能推荐 #智面引擎 #Remotion #VoxCPM2 #行业科普 #短视频运营\n"
+            ),
+            "douyin.md": (
+                "# 别只收藏AI工具，先看它能不能交付\n\n"
+                "我新建了 AI 优质技能推荐合集。第一条聊智面引擎：Remotion 做可复用画面，本地 VoxCPM2 做配音，把行业知识变成 60–90 秒科普视频。\n\n"
+                "你想看哪个行业的 AI 技能工作流？\n\n"
+                "标签：#AI工具 #AI技能推荐 #智面引擎 #短视频制作 #行业科普\n"
+            ),
+            "bilibili.md": (
+                f"# {title}：AI优质技能推荐合集开篇\n\n"
+                "本期介绍为什么要做“AI优质技能推荐合集”，以及智面引擎如何把脚本、VoxCPM2 本地配音、Remotion 程序化画面和 QA 打包成一条可复用的行业科普视频生产线。\n\n"
+                "适合：想用 AI 做短视频、课程、行业科普、产品解释的创作者和技术同学。\n"
+                "说明：配音为 AI 合成声音，不涉及真人音色克隆。\n\n"
+                "标签：AI工具,Remotion,VoxCPM2,短视频制作,行业科普,程序化视频\n"
+            ),
+        }
+        for filename, content in copies.items():
+            _write(output_dir / "copy" / filename, content)
+        return
     copies = {
         "xiaohongshu.md": f"# {title}｜技术面试高频追问\n\n标签：#技术面试 #AI面试 #后端 #算法 #智面引擎\n\n描述：先收藏这一期，按原题、原理、追问、回答骨架复习。\n",
         "douyin.md": f"# 面试官问{title}，别只背答案\n\n标签：#大厂面试 #程序员 #AI学习 #后端 #算法\n\n描述：真正加分的是能解释为什么。你还想看哪个追问？\n",
@@ -209,8 +354,13 @@ def run(args: argparse.Namespace) -> Path:
     topic = _select_topic(args, run_date)
     workspace.update_manifest(status="dry_run" if args.dry_run else "in_progress", stage="planned", topic=topic, mode=args.mode)
 
-    _write(workspace.output_dir / "research" / "sources.md", "[S1] 待替换为当天官方文档、论文或权威源码。\n")
+    _write_sources(workspace.output_dir, topic)
     scenes = _draft_scenes(topic)
+    package_scene_images(
+        scenes,
+        Path(args.image_map) if args.image_map else None,
+        workspace.output_dir,
+    )
     _write(workspace.output_dir / "script" / "narration.md", "\n".join(scene["narration"] for scene in scenes) + "\n")
 
     segment_paths: list[Path] = []
@@ -277,6 +427,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dry-run", action="store_true", help="Use deterministic placeholders")
     parser.add_argument("--skip-audio", action="store_true", help="Use silent placeholder WAV files")
     parser.add_argument("--skip-render", action="store_true", help="Use placeholder video and cover files")
+    parser.add_argument("--image-map", help="JSON map of scene ids to model-generated local image files")
     return parser
 
 

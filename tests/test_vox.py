@@ -19,6 +19,11 @@ class FakeModel:
         return np.zeros(1_600, dtype=np.float32)
 
 
+def test_default_voice_is_a_professional_male_narrator():
+    assert "男" in DEFAULT_VOICE_PROMPT
+    assert "解说主播" in DEFAULT_VOICE_PROMPT
+
+
 def test_model_is_loaded_once_and_segments_are_written(tmp_path: Path):
     loads = []
     model = FakeModel()

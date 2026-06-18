@@ -11,6 +11,9 @@ export const sceneSchema = z.object({
   visualType: z.enum(["editorial", "code", "process", "flow", "comparison", "formula"]),
   visualPayload: z.record(z.string(), z.unknown()).default({}),
   audioFile: z.string().optional(),
+  imageFile: z.string().optional(),
+  imageAlt: z.string().optional(),
+  imagePrompt: z.string().optional(),
 });
 
 export const videoSchema = z.object({
