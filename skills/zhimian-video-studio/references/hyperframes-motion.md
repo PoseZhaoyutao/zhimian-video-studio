@@ -50,3 +50,15 @@ Each scene should contain at least three visual layers:
 | Stagger | Offset each item's frame passed into `spring()` |
 
 Do not use CSS transitions, CSS animations, random values, infinite loops, or time-based browser state. The rendered frame number is the only clock.
+
+## Using the HyperFrames skill together with Remotion
+
+HyperFrames and Remotion are complementary, not competing: HyperFrames is the **motion-design grammar** and prototyping surface; Remotion stays the **deterministic renderer and audio-driven timeline owner** (1080×1920, 30fps — non-negotiable).
+
+Joint workflow:
+
+1. When a scene needs richer or more promotional motion, open the `hyperframes` skill to design the choreography — entrance direction, marker/burst accents, transition feel, beat alignment.
+2. Translate that choreography into the Remotion mapping table above (frame-derived `spring()`/`interpolate()`, `SceneWipe`, `MotionBackdrop`), so the final pixels are still produced by the deterministic Remotion render.
+3. Do **not** introduce a second render chain or composite HyperFrames HTML output directly into the delivery video — keep a single Remotion output so timing stays locked to measured audio.
+
+In short: design in HyperFrames, render in Remotion. The HyperFrames pass informs the motion; Remotion guarantees the frame-accurate, reproducible result.

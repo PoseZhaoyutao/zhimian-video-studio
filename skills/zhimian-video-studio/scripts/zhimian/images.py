@@ -2,12 +2,56 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
 
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+
+
+def autogenerate_images(
+    scenes: list[dict[str, Any]],
+    image_gen_cmd: str,
+    staging_dir: Path,
+) -> tuple[dict[str, dict[str, str]], list[dict[str, str]]]:
+    """Run a pluggable image-generation command for every scene with a prompt.
+
+    ``image_gen_cmd`` is a command template containing ``{prompt}`` and ``{out}``
+    placeholders, e.g. ``"python my_gen.py --prompt {prompt} --out {out}"``. The
+    command is invoked once per scene that carries a non-empty ``image_prompt``
+    (alt text falls back to ``image_alt``/``on_screen_text``). Any scene whose
+    command fails or produces no file is skipped so the caller can apply the
+    motion-only fallback. Returns ``(image_map, failures)`` where ``image_map``
+    is keyed by scene id and ready for :func:`package_scene_images`.
+    """
+    # Absolute staging so downstream packaging resolves the source unambiguously.
+    staging_dir = Path(staging_dir).resolve()
+    staging_dir.mkdir(parents=True, exist_ok=True)
+    template = [token.strip('"') for token in shlex.split(image_gen_cmd, posix=False)]
+
+    image_map: dict[str, dict[str, str]] = {}
+    failures: list[dict[str, str]] = []
+    for scene in scenes:
+        prompt = str(scene.get("image_prompt") or "").strip()
+        if not prompt or scene.get("image_file"):
+            continue
+        scene_id = str(scene.get("id"))
+        out = staging_dir / f"{_safe_scene_name(scene_id)}.png"
+        cmd = [token.replace("{prompt}", prompt).replace("{out}", str(out)) for token in template]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
+        except OSError as exc:  # command not found / not executable
+            failures.append({"scene_id": scene_id, "reason": f"command error: {exc}"})
+            continue
+        if result.returncode != 0 or not out.is_file():
+            failures.append({"scene_id": scene_id, "reason": f"exit {result.returncode}, no image produced"})
+            continue
+        alt = str(scene.get("image_alt") or scene.get("on_screen_text") or "").strip() or scene_id
+        image_map[scene_id] = {"path": str(out), "alt": alt, "prompt": prompt}
+    return image_map, failures
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:

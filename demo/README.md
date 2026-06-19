@@ -6,6 +6,15 @@
 - `media/frame-30.png`：视频第 30 帧预览。
 - `media/fixture.mp4`：短 Remotion 渲染片段。
 - `sample-output/2026-06-18/`：一次 dry-run 的核心输出结构。
+- `edit-plan.example.json`：本地剪辑层的示例计划（拼接 + 交叉淡入）。
+
+体验本地视频剪辑（`references/editing.md`）：
+
+```powershell
+python skills/zhimian-video-studio/scripts/run_daily.py `
+  --edit-plan demo/edit-plan.example.json `
+  --edit-output demo/edited-demo.mp4
+```
 
 真实生产产物不会提交到仓库，请运行：
 

@@ -52,6 +52,23 @@ Editorial concept illustration of a small-business owner directing an AI-assiste
 - Preserve the same art direction across all images in one episode.
 - Generated images complement `flow`, `comparison`, `formula`, `process`, and `code`; they do not replace structured explanation.
 
+## Pluggable auto-generation (`--image-gen-cmd`)
+
+智能生图 is a pluggable interface, not a hard-wired backend. Give each scene that should carry an image an `image_prompt` (in the `--scenes-file`), then pass a command template that knows how to turn a prompt into an image:
+
+```powershell
+python skills/zhimian-video-studio/scripts/run_daily.py --date 2026-06-19 `
+  --scenes-file scenes.json `
+  --image-gen-cmd "python my_sd.py --prompt {prompt} --out {out}"
+```
+
+- `{prompt}` and `{out}` are substituted per scene; the command must write an image to `{out}`.
+- Any scene whose command fails or writes nothing is skipped and recorded in `logs/image-gen.log`, then the motion-only fallback applies — image failure never blocks delivery.
+- Works with any backend (local Stable Diffusion, a hosted API wrapper, an MCP shim) without changing skill code.
+- An explicit `--image-map` always wins over an auto-generated entry for the same scene, so you can hand-pick a few and auto-generate the rest.
+
+When no `--image-gen-cmd` and no `--image-map` are provided, the pipeline records `status: not_provided` and uses the motion-only fallback.
+
 ## Audit contract
 
 `assets/image-plan.json` records each attached scene, packaged file, alt text, prompt, attached count, and the `motion-only` fallback. Keep this file with the final delivery package.

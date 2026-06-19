@@ -12,7 +12,8 @@ from datetime import date
 from pathlib import Path
 
 from zhimian.calendar import topic_for_day
-from zhimian.images import package_scene_images
+from zhimian.editing import load_edit_plan, render_edit
+from zhimian.images import autogenerate_images, package_scene_images
 from zhimian.planner import custom_topic, generate_content_plan, load_plan_topic, write_content_plan
 from zhimian.qa import run_qa
 from zhimian.remotion import build_render_command, build_still_command
@@ -22,6 +23,12 @@ from zhimian.workspace import prepare_run
 
 
 FPS = 30
+
+# A neutral line spoken once in the default male-narrator style to mint a
+# synthetic voice anchor. When --unify-timbre is set, every segment is then
+# conditioned on this single clip so the whole video keeps one timbre. The
+# anchor is AI-designed from a text prompt and does not clone a real person.
+VOICE_ANCHOR_TEXT = "智面引擎，用程序化视频把专业知识讲清楚，让每个行业都能做出可信的科普内容。"
 
 
 def _write(path: Path, text: str) -> None:
@@ -53,6 +60,25 @@ def _concat_wavs(paths: list[Path], output: Path) -> None:
         for path in paths:
             with wave.open(str(path), "rb") as segment:
                 combined.writeframes(segment.readframes(segment.getnframes()))
+
+
+def _ensure_voice_anchor(output_dir: Path) -> Path:
+    """Mint (or reuse) one synthetic male-narrator clip and return its path.
+
+    The clip is generated prompt-only in the default voice, then reused as the
+    fixed ``reference_wav_path`` for every segment so the narration keeps a
+    single consistent timbre. It is AI-designed synthetic audio, not a clone of
+    a real person, which is why ``authorized_voice_clone`` is permitted for it.
+    """
+    anchor_path = output_dir / "audio" / "voice-anchor.wav"
+    if anchor_path.exists() and anchor_path.stat().st_size > 0:
+        return anchor_path
+    staging = output_dir / "audio" / "_anchor"
+    anchor = VoxAdapter().generate_segments([VOICE_ANCHOR_TEXT], staging)[0]
+    anchor_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(anchor.path, anchor_path)
+    shutil.rmtree(staging, ignore_errors=True)
+    return anchor_path
 
 
 def _repo_root() -> Path:
@@ -252,6 +278,9 @@ def _is_skill_recommendation_topic(topic: dict[str, str | int]) -> bool:
 
 
 def _topic_benefit(topic: dict[str, str | int]) -> str:
+    benefit = topic.get("benefit")
+    if benefit:
+        return str(benefit)
     if _is_skill_recommendation_topic(topic):
         return "把好用 AI 技能变成行业科普生产线"
     return "60 秒拆出面试官真正想追问的技术细节"
@@ -323,6 +352,28 @@ def _write_platform_copy(output_dir: Path, topic: dict[str, str | int]) -> None:
         _write(output_dir / "copy" / filename, content)
 
 
+def _load_scenes_file(path: Path) -> list[dict]:
+    """Load a hand-authored scene list for a custom episode (e.g. a tutorial).
+
+    Accepts either a bare JSON list of scenes or an object with a ``scenes`` key.
+    Each scene needs at least ``id`` and non-empty ``narration``; the remaining
+    fields default so the timeline/render contract stays satisfied.
+    """
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    scenes = data["scenes"] if isinstance(data, dict) else data
+    if not isinstance(scenes, list) or not scenes:
+        raise ValueError("scenes file must contain a non-empty list of scenes")
+    for index, scene in enumerate(scenes, start=1):
+        if "id" not in scene or not str(scene.get("narration", "")).strip():
+            raise ValueError(f"scene {index} requires 'id' and non-empty 'narration'")
+        scene.setdefault("on_screen_text", scene["narration"])
+        scene.setdefault("caption", scene["narration"])
+        scene.setdefault("visual_type", "editorial")
+        scene.setdefault("visual_payload", {})
+        scene.setdefault("source_refs", ["S1"])
+    return scenes
+
+
 def _select_topic(args: argparse.Namespace, run_date: str) -> dict[str, str | int]:
     day = date.fromisoformat(run_date).day
     if args.topic:
@@ -334,6 +385,12 @@ def _select_topic(args: argparse.Namespace, run_date: str) -> dict[str, str | in
 
 def run(args: argparse.Namespace) -> Path:
     run_date = args.date or date.today().isoformat()
+    if args.edit_plan:
+        plan = load_edit_plan(Path(args.edit_plan))
+        output = Path(args.edit_output) if args.edit_output else Path(args.output_root) / "edits" / f"{run_date}-edit.mp4"
+        render_edit(plan, output)
+        print(output)
+        return output
     if args.make_plan:
         plan_start = args.plan_start or run_date
         plan = generate_content_plan(
@@ -352,15 +409,40 @@ def run(args: argparse.Namespace) -> Path:
         return workspace.output_dir
 
     topic = _select_topic(args, run_date)
+    if args.benefit:
+        topic["benefit"] = args.benefit
     workspace.update_manifest(status="dry_run" if args.dry_run else "in_progress", stage="planned", topic=topic, mode=args.mode)
 
     _write_sources(workspace.output_dir, topic)
-    scenes = _draft_scenes(topic)
-    package_scene_images(
-        scenes,
-        Path(args.image_map) if args.image_map else None,
-        workspace.output_dir,
-    )
+    scenes = _load_scenes_file(Path(args.scenes_file)) if args.scenes_file else _draft_scenes(topic)
+
+    image_map_path = Path(args.image_map) if args.image_map else None
+    if args.image_gen_cmd:
+        # Pluggable 智能生图: run the user's image-gen command per scene prompt,
+        # then merge with any explicit --image-map (explicit entries win), and
+        # fall back to motion-only for scenes the command could not produce.
+        auto_map, gen_failures = autogenerate_images(
+            scenes, args.image_gen_cmd, workspace.output_dir / "assets" / "_autogen"
+        )
+        merged: dict = dict(auto_map)
+        if image_map_path:
+            explicit = json.loads(image_map_path.read_text(encoding="utf-8"))
+            for scene_id, entry in explicit.items():
+                source = Path(str(entry.get("path", ""))).expanduser()
+                if not source.is_absolute():
+                    source = image_map_path.parent / source
+                merged[scene_id] = {**entry, "path": str(source.resolve())}
+        if merged:
+            resolved_path = workspace.output_dir / "assets" / "image-map.resolved.json"
+            _write_json(resolved_path, merged)
+            image_map_path = resolved_path
+        if gen_failures:
+            _write(
+                workspace.output_dir / "logs" / "image-gen.log",
+                "\n".join(f"{f['scene_id']}: {f['reason']}" for f in gen_failures) + "\n",
+            )
+
+    package_scene_images(scenes, image_map_path, workspace.output_dir)
     _write(workspace.output_dir / "script" / "narration.md", "\n".join(scene["narration"] for scene in scenes) + "\n")
 
     segment_paths: list[Path] = []
@@ -372,7 +454,11 @@ def run(args: argparse.Namespace) -> Path:
             _scene["audio_duration"] = 10.0
             _scene["audio_file"] = f"generated/{run_date}/{index:02d}.wav"
     else:
-        adapter = VoxAdapter()
+        if args.unify_timbre:
+            anchor = _ensure_voice_anchor(workspace.output_dir)
+            adapter = VoxAdapter(reference_audio=anchor, authorized_voice_clone=True)
+        else:
+            adapter = VoxAdapter()
         outputs = adapter.generate_segments([scene["narration"] for scene in scenes], workspace.output_dir / "audio" / "segments")
         for scene, audio in zip(scenes, outputs, strict=True):
             segment_paths.append(audio.path)
@@ -428,6 +514,32 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--skip-audio", action="store_true", help="Use silent placeholder WAV files")
     parser.add_argument("--skip-render", action="store_true", help="Use placeholder video and cover files")
     parser.add_argument("--image-map", help="JSON map of scene ids to model-generated local image files")
+    parser.add_argument(
+        "--unify-timbre",
+        action="store_true",
+        help="Anchor every narration segment to one synthetic AI voice clip so the whole video keeps a single timbre",
+    )
+    parser.add_argument(
+        "--scenes-file",
+        help="JSON file of hand-authored scenes (for custom episodes such as tutorials) instead of the auto-drafted script",
+    )
+    parser.add_argument(
+        "--benefit",
+        help="Override the cover benefit line for a custom episode",
+    )
+    parser.add_argument(
+        "--image-gen-cmd",
+        help="Pluggable 智能生图 command template with {prompt} and {out} placeholders; "
+             "run per scene image_prompt, with motion-only fallback when it fails",
+    )
+    parser.add_argument(
+        "--edit-plan",
+        help="Run the local video editor on this JSON edit plan (concat/crossfade/overlay/music) and exit",
+    )
+    parser.add_argument(
+        "--edit-output",
+        help="Output path for --edit-plan (default: <output-root>/edits/<date>-edit.mp4)",
+    )
     return parser
 
 

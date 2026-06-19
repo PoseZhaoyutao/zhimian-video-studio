@@ -18,6 +18,10 @@ Produce review-ready 9:16 technical and industry-explainer short videos. The cor
 | 指定主题生成视频 | Use `--topic` / user-provided title directly; do not force the fallback seed plan. |
 | 调用AI科普视频Skill | Treat as manual immediate production for the current date. |
 | 重做今天的视频 | Create `v2`, `v3`, etc. under the same date folder. |
+| 统一音色 | Add `--unify-timbre`: one synthetic male anchor conditions every segment. |
+| 自定义脚本(教程等) | Author scenes and pass `--scenes-file`; override the cover line with `--benefit`. |
+| 智能生图 | Give scenes an `image_prompt` and pass `--image-gen-cmd "...{prompt}...{out}..."`; motion-only fallback on failure. |
+| 本地视频剪辑/合成 | Write an edit plan and run `--edit-plan` (concat/crossfade/overlay/music). See `references/editing.md`. |
 | 17:00 automation | Start production, update manifest stages, resume if interrupted. |
 | 19:00 automation | Run QA and deliver the review package or failure report. |
 
@@ -27,7 +31,8 @@ Produce review-ready 9:16 technical and industry-explainer short videos. The cor
 - Use `references/editorial-style.md` when writing scripts and platform copy.
 - Use `references/visual-system.md` when changing cover,字幕, layout, or animation style.
 - Use `references/hyperframes-motion.md` when a video should feel more dynamic, promotional, or visually expressive.
-- Use `references/generative-visuals.md` when selecting scenes, prompting the image-generation tool, writing an image map, packaging generated assets, or applying the motion-only fallback.
+- Use `references/generative-visuals.md` when selecting scenes, prompting the image-generation tool or `--image-gen-cmd`, writing an image map, packaging generated assets, or applying the motion-only fallback.
+- Use `references/editing.md` when assembling multiple clips, B-roll, overlays, or a music bed via the local `--edit-plan` montage layer.
 - Use `schemas/timeline.schema.json` and `schemas/manifest.schema.json` when writing structured files.
 
 ## Production Workflow
@@ -110,5 +115,15 @@ python skills/zhimian-video-studio/scripts/run_daily.py --make-plan --plan-start
 python skills/zhimian-video-studio/scripts/run_daily.py --date 2026-07-03 --topic "如何用AI审查后端系统设计方案" --column "AI实操"
 python skills/zhimian-video-studio/scripts/run_daily.py --date 2026-06-18 --rebuild
 python skills/zhimian-video-studio/scripts/run_daily.py --date 2026-06-18 --dry-run --skip-audio --skip-render
+python skills/zhimian-video-studio/scripts/run_daily.py --date 2026-06-19 --topic "..." --scenes-file scenes.json --benefit "封面副标题" --unify-timbre
+python skills/zhimian-video-studio/scripts/run_daily.py --date 2026-06-19 --scenes-file scenes.json --image-gen-cmd "python my_sd.py --prompt {prompt} --out {out}"
+python skills/zhimian-video-studio/scripts/run_daily.py --edit-plan edit-plan.json --edit-output outputs/2026-06-19/video/edited-9x16.mp4
 ```
+
+## Post-production and roadmap
+
+- `--unify-timbre` keeps one narrator voice across the whole video; `--scenes-file` + `--benefit` drive custom episodes (tutorials, promos) that the auto-script does not cover.
+- 智能生图 is pluggable via `--image-gen-cmd` (any backend), with the motion-only fallback preserved.
+- Local video editing/montage lives in `references/editing.md` (`--edit-plan`): trim, concat, crossfade, B-roll/logo overlay, and background-music mixing.
+- Next on the roadmap: 口播/presenter-style narration and richer montage, both building on the editing layer above.
 

@@ -141,6 +141,25 @@ python skills/zhimian-video-studio/scripts/run_daily.py `
 
 CLI 仅接受现有的 PNG、JPEG 或 WebP 文件，并将图片、替代文本和原始提示词写入审计包。若生图工具不可用或某张图片失败，流程会记录 `motion-only` 降级状态并继续使用 Remotion 动效，不阻塞配音、渲染和交付。完整选择、提示词与 QA 规范见 [`generative-visuals.md`](skills/zhimian-video-studio/references/generative-visuals.md)。
 
+## 新增能力
+
+- **统一音色 `--unify-timbre`**：生成一段合成男声锚点，让全片每个分段共享同一音色（AI 合成，非真人克隆）。
+- **自定义脚本 `--scenes-file` + 封面副标题 `--benefit`**：用手写场景做教程/推广等自定义选题，绕开仅适配面试/推广的自动脚本。
+- **智能生图接口 `--image-gen-cmd`**：给场景加 `image_prompt`，再传一个 `"...{prompt}...{out}..."` 命令模板即可接入任意生图后端；失败自动 `motion-only` 降级，记录在 `logs/image-gen.log`。显式 `--image-map` 优先级更高。
+- **本地视频剪辑 `--edit-plan`**：ffmpeg 后端的本地合成层（拼接 / 交叉淡入 / B-roll·Logo 叠加 / 背景音乐混音），与 Remotion 渲染解耦。计划格式与用法见 [`editing.md`](skills/zhimian-video-studio/references/editing.md)。
+- **HyperFrames × Remotion**：用 `hyperframes` 技能做动效设计，Remotion 仍是唯一确定性渲染器，映射规范见 [`hyperframes-motion.md`](skills/zhimian-video-studio/references/hyperframes-motion.md)。
+- **路线图**：口播 / presenter 风格与更丰富的剪辑能力将基于上述剪辑层继续构建。
+
+```powershell
+# 智能生图（任意后端）
+python skills/zhimian-video-studio/scripts/run_daily.py --date 2026-06-19 `
+  --scenes-file scenes.json --image-gen-cmd "python my_sd.py --prompt {prompt} --out {out}"
+
+# 本地剪辑：把多段片段合成一条交付视频
+python skills/zhimian-video-studio/scripts/run_daily.py `
+  --edit-plan edit-plan.json --edit-output outputs/2026-06-19/video/edited-9x16.mp4
+```
+
 ## 输出目录
 
 ```text

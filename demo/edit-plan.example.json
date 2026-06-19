@@ -1,0 +1,9 @@
+{
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "clips": [
+    { "src": "media/fixture.mp4", "transition": "cut" },
+    { "src": "media/fixture.mp4", "transition": "crossfade", "transition_duration": 0.5 }
+  ]
+}
