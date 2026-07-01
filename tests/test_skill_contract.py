@@ -36,10 +36,26 @@ def test_required_reference_files_exist():
         "references/editorial-style.md",
         "references/visual-system.md",
         "references/generative-visuals.md",
+        "references/evidence-visuals.md",
         "schemas/timeline.schema.json",
         "schemas/manifest.schema.json",
     ]:
         assert (skill_dir / relative).exists()
+
+
+def test_skill_requires_web_tutorial_and_experiment_visual_search():
+    text = SKILL.read_text(encoding="utf-8")
+    for required in [
+        "references/evidence-visuals.md",
+        "research/visual-search.md",
+        "assets/evidence-visuals.json",
+        "tutorial",
+        "comparison",
+        "experiment",
+        "source_url",
+        "rights_basis",
+    ]:
+        assert required in text
 
 
 def test_skill_keeps_safety_and_delivery_boundaries():

@@ -14,6 +14,9 @@ export const sceneSchema = z.object({
   imageFile: z.string().optional(),
   imageAlt: z.string().optional(),
   imagePrompt: z.string().optional(),
+  imageAttribution: z.string().optional(),
+  imageRightsBasis: z.string().optional(),
+  imageRole: z.string().optional(),
 });
 
 export const videoSchema = z.object({

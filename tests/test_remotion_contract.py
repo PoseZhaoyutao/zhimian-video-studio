@@ -96,6 +96,9 @@ def test_remotion_props_convert_python_timeline_to_component_contract():
                 "image_file": "assets/generated/hook.png",
                 "image_alt": "Attention 可视化",
                 "image_prompt": "editorial attention mechanism",
+                "image_attribution": "PyTorch docs",
+                "image_rights_basis": "official-documentation",
+                "image_role": "tutorial",
             }
         ],
     )
@@ -109,6 +112,9 @@ def test_remotion_props_convert_python_timeline_to_component_contract():
     assert props["scenes"][0]["imageFile"] == "assets/generated/hook.png"
     assert props["scenes"][0]["imageAlt"] == "Attention 可视化"
     assert props["scenes"][0]["imagePrompt"] == "editorial attention mechanism"
+    assert props["scenes"][0]["imageAttribution"] == "PyTorch docs"
+    assert props["scenes"][0]["imageRightsBasis"] == "official-documentation"
+    assert props["scenes"][0]["imageRole"] == "tutorial"
     assert props["captions"][0]["startMs"] == 0
     assert props["captions"][0]["endMs"] == 3000
 
@@ -218,3 +224,15 @@ def test_scene_image_animation_is_frame_driven_and_uses_static_assets():
     assert "Img" in source
     assert "imageAlt" in source
     assert 'objectPosition: "center 35%"' in source
+
+
+def test_scene_image_can_label_web_evidence_and_show_attribution():
+    source = (REMOTION / "src" / "components" / "SceneImage.tsx").read_text(encoding="utf-8")
+    frame = (REMOTION / "src" / "components" / "EditorialFrame.tsx").read_text(encoding="utf-8")
+    types = (REMOTION / "src" / "types.ts").read_text(encoding="utf-8")
+
+    assert "imageAttribution" in source
+    assert "EVIDENCE" in source
+    assert "imageAttribution={scene.imageAttribution}" in frame
+    assert "imageAttribution" in types
+    assert 'objectFit: imageAttribution ? "contain" : "cover"' in source

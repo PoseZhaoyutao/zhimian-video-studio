@@ -95,3 +95,28 @@ def test_qa_fails_wrong_video_metadata(tmp_path: Path):
 
     assert report["passed"] is False
     assert any("1080x1920" in failure for failure in report["failures"])
+
+
+def test_qa_fails_when_evidence_manifest_lacks_provenance(tmp_path: Path):
+    _write_minimal_package(tmp_path)
+    evidence_dir = tmp_path / "assets" / "evidence"
+    evidence_dir.mkdir(parents=True)
+    (evidence_dir / "hook.png").write_bytes(b"image")
+    (tmp_path / "assets" / "evidence-visuals.json").write_text(
+        json.dumps(
+            {
+                "status": "ready",
+                "attached_count": 1,
+                "entries": [{"scene_id": "hook", "file": "assets/evidence/hook.png"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = run_qa(
+        tmp_path,
+        media_probe=lambda _: {"width": 1080, "height": 1920, "fps": 30, "duration": 75, "has_audio": True},
+    )
+
+    assert report["passed"] is False
+    assert any("evidence" in failure and "source_url" in failure for failure in report["failures"])

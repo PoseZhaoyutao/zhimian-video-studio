@@ -28,6 +28,7 @@
 - Preserve the approved cover composition unless the user explicitly requests a cover redesign.
 - Generate 2–4 original concept images per episode when model image generation is available. Follow `generative-visuals.md` for scene selection, prompting, audit metadata, and fallback.
 - Present generated images inside the editorial system: ink border, cream/black framing, category accent, purposeful crop, slow frame-driven camera motion, and readable captions outside the bitmap.
+- Present web tutorial, comparison, and experiment visuals through the same frame, but label them `EVIDENCE` and keep visible source attribution. Follow `evidence-visuals.md`.
 - Keep factual text, labels, formulas, and data in Remotion layers. Generated pixels must not be the source of factual claims.
 - Do not produce a video that is only text cards. Each production should include at least two motion templates:
   - `flow`: steps connected by an animated line or moving signal.

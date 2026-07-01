@@ -13,7 +13,7 @@ from pathlib import Path
 
 from zhimian.calendar import topic_for_day
 from zhimian.editing import load_edit_plan, render_edit
-from zhimian.images import autogenerate_images, package_scene_images
+from zhimian.images import autogenerate_images, package_evidence_images, package_scene_images
 from zhimian.planner import custom_topic, generate_content_plan, load_plan_topic, write_content_plan
 from zhimian.qa import run_qa
 from zhimian.remotion import build_render_command, build_still_command
@@ -143,6 +143,9 @@ def _remotion_props(topic: dict[str, str | int], scenes: list[dict]) -> dict:
                 "imageFile": scene.get("image_static_file", scene.get("image_file")),
                 "imageAlt": scene.get("image_alt"),
                 "imagePrompt": scene.get("image_prompt"),
+                "imageAttribution": scene.get("image_attribution"),
+                "imageRightsBasis": scene.get("image_rights_basis"),
+                "imageRole": scene.get("image_role"),
             }
         )
         captions.append(
@@ -414,6 +417,10 @@ def run(args: argparse.Namespace) -> Path:
     workspace.update_manifest(status="dry_run" if args.dry_run else "in_progress", stage="planned", topic=topic, mode=args.mode)
 
     _write_sources(workspace.output_dir, topic)
+    _write(
+        workspace.output_dir / "research" / "visual-search.md",
+        "# Visual search\n\nNo agent-mediated visual search record was supplied for this CLI run.\n",
+    )
     scenes = _load_scenes_file(Path(args.scenes_file)) if args.scenes_file else _draft_scenes(topic)
 
     image_map_path = Path(args.image_map) if args.image_map else None
@@ -443,6 +450,11 @@ def run(args: argparse.Namespace) -> Path:
             )
 
     package_scene_images(scenes, image_map_path, workspace.output_dir)
+    package_evidence_images(
+        scenes,
+        Path(args.evidence_map) if args.evidence_map else None,
+        workspace.output_dir,
+    )
     _write(workspace.output_dir / "script" / "narration.md", "\n".join(scene["narration"] for scene in scenes) + "\n")
 
     segment_paths: list[Path] = []
@@ -515,9 +527,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--skip-render", action="store_true", help="Use placeholder video and cover files")
     parser.add_argument("--image-map", help="JSON map of scene ids to model-generated local image files")
     parser.add_argument(
+        "--evidence-map",
+        help="JSON map of scene ids to downloaded or redrawn tutorial/experiment visuals with provenance",
+    )
+    parser.add_argument(
         "--unify-timbre",
-        action="store_true",
-        help="Anchor every narration segment to one synthetic AI voice clip so the whole video keeps a single timbre",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Unify the whole video's timbre via one synthetic male-narrator anchor (default: on). "
+             "Use --no-unify-timbre only when the user explicitly wants per-segment independent voices.",
     )
     parser.add_argument(
         "--scenes-file",

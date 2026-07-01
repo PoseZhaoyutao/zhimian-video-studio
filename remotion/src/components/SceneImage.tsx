@@ -6,8 +6,10 @@ const clamp = {extrapolateLeft: "clamp", extrapolateRight: "clamp"} as const;
 export const SceneImage: React.FC<{
   imageFile: string;
   imageAlt: string;
+  imageAttribution?: string;
+  imageRole?: string;
   accent: string;
-}> = ({imageFile, imageAlt, accent}) => {
+}> = ({imageFile, imageAlt, imageAttribution, imageRole, accent}) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
   const enter = spring({frame: frame - 8, fps, config: {damping: 18, stiffness: 110}});
@@ -36,7 +38,7 @@ export const SceneImage: React.FC<{
         style={{
           width: "100%",
           height: "100%",
-          objectFit: "cover",
+          objectFit: imageAttribution ? "contain" : "cover",
           objectPosition: "center 35%",
           transform: `translateX(${drift}%) scale(${zoom})`,
           filter: "saturate(0.92) contrast(1.04)",
@@ -61,9 +63,30 @@ export const SceneImage: React.FC<{
           lineHeight: 1.2,
         }}
       >
-        <span style={{color: accent}}>AI VISUAL</span>
+        <span style={{color: accent}}>{imageAttribution ? "EVIDENCE" : "AI VISUAL"}</span>
         <span>{imageAlt}</span>
       </div>
+      {imageAttribution ? (
+        <div
+          style={{
+            position: "absolute",
+            top: 18,
+            right: 18,
+            maxWidth: "62%",
+            padding: "8px 12px",
+            backgroundColor: "rgba(244,239,228,0.9)",
+            color: COLORS.ink,
+            border: `2px solid ${COLORS.ink}`,
+            borderRadius: 14,
+            fontFamily: FONT_FAMILY,
+            fontSize: 18,
+            fontWeight: 800,
+            lineHeight: 1.2,
+          }}
+        >
+          {imageRole ? `${imageRole.toUpperCase()} · ` : ""}SOURCE: {imageAttribution}
+        </div>
+      ) : null}
     </div>
   );
 };

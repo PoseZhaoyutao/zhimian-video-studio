@@ -75,6 +75,19 @@ def run_qa(output_dir: Path | str, *, media_probe: MediaProbe = probe_media) -> 
     if sources_path.exists() and not sources_path.read_text(encoding="utf-8").strip():
         failures.append("sources.md is empty")
 
+    evidence_path = root / "assets" / "evidence-visuals.json"
+    if evidence_path.exists():
+        evidence = _read_json(evidence_path)
+        if evidence.get("status") == "ready":
+            for entry in evidence.get("entries", []):
+                scene_id = entry.get("scene_id", "<unknown>")
+                for field in ("file", "source_url", "source_title", "rights_basis", "attribution"):
+                    if not entry.get(field):
+                        failures.append(f"evidence {scene_id} missing {field}")
+                file_value = entry.get("file")
+                if file_value and not (root / str(file_value)).is_file():
+                    failures.append(f"evidence {scene_id} missing packaged file: {file_value}")
+
     video_path = root / "video" / "final-9x16.mp4"
     if video_path.exists() and video_path.stat().st_size > 0:
         try:

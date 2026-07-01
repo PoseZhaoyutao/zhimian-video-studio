@@ -143,7 +143,7 @@ CLI 仅接受现有的 PNG、JPEG 或 WebP 文件，并将图片、替代文本�
 
 ## 新增能力
 
-- **统一音色 `--unify-timbre`**：生成一段合成男声锚点，让全片每个分段共享同一音色（AI 合成，非真人克隆）。
+- **统一音色（默认开启）**：每条视频都用一段合成男声锚点让全片音色一致（AI 合成，非真人克隆）；只有用户明确要求各段独立配音时才用 `--no-unify-timbre` 关闭。
 - **自定义脚本 `--scenes-file` + 封面副标题 `--benefit`**：用手写场景做教程/推广等自定义选题，绕开仅适配面试/推广的自动脚本。
 - **智能生图接口 `--image-gen-cmd`**：给场景加 `image_prompt`，再传一个 `"...{prompt}...{out}..."` 命令模板即可接入任意生图后端；失败自动 `motion-only` 降级，记录在 `logs/image-gen.log`。显式 `--image-map` 优先级更高。
 - **本地视频剪辑 `--edit-plan`**：ffmpeg 后端的本地合成层（拼接 / 交叉淡入 / B-roll·Logo 叠加 / 背景音乐混音），与 Remotion 渲染解耦。计划格式与用法见 [`editing.md`](skills/zhimian-video-studio/references/editing.md)。

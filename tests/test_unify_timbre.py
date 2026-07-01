@@ -34,11 +34,15 @@ class _FakeAdapter:
         return results
 
 
-def test_unify_timbre_flag_defaults_to_false():
+def test_unify_timbre_defaults_on_and_can_be_disabled():
+    # Unified timbre is the standing default for every video.
     args = run_daily.build_parser().parse_args(["--date", "2026-06-18"])
-    assert args.unify_timbre is False
+    assert args.unify_timbre is True
     args = run_daily.build_parser().parse_args(["--date", "2026-06-18", "--unify-timbre"])
     assert args.unify_timbre is True
+    # Explicit opt-out only.
+    args = run_daily.build_parser().parse_args(["--date", "2026-06-18", "--no-unify-timbre"])
+    assert args.unify_timbre is False
 
 
 def test_ensure_voice_anchor_creates_then_reuses(tmp_path: Path, monkeypatch):

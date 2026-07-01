@@ -1,4 +1,4 @@
-import json
+﻿import json
 import subprocess
 import sys
 from pathlib import Path
@@ -51,7 +51,8 @@ def test_cli_dry_run_creates_complete_dated_package(tmp_path: Path):
     manifest = json.loads((day / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["status"] == "dry_run"
     assert manifest["stage"] == "verified"
-    assert manifest["topic"]["title"] == "短视频推荐流如何拆成召回、排序、重排"
+    assert manifest["topic"]["title"] == "LoRA为什么低秩更新也能微调大模型"
+    assert manifest["topic"]["column"] == "大厂拆招·AI算法"
 
     timeline = json.loads((day / "script" / "timeline.json").read_text(encoding="utf-8"))
     assert timeline["fps"] == 30
@@ -109,6 +110,58 @@ def test_cli_dry_run_packages_model_generated_scene_images(tmp_path: Path):
     assert by_id["principle"]["image_file"] == "assets/generated/principle.jpg"
     image_plan = json.loads((output_dir / "assets" / "image-plan.json").read_text(encoding="utf-8"))
     assert image_plan["attached_count"] == 2
+
+
+def test_cli_dry_run_packages_web_evidence_images_with_provenance(tmp_path: Path):
+    source = tmp_path / "tutorial-comparison.png"
+    source.write_bytes(b"web evidence")
+    evidence_map = tmp_path / "evidence-map.json"
+    evidence_map.write_text(
+        json.dumps(
+            {
+                "principle": {
+                    "path": str(source),
+                    "alt": "官方教程中的归一化对比",
+                    "source_url": "https://docs.pytorch.org/docs/stable/nn.html",
+                    "source_title": "PyTorch normalization documentation",
+                    "rights_basis": "official-documentation",
+                    "license": "Documentation excerpt for commentary",
+                    "attribution": "PyTorch documentation",
+                    "role": "tutorial",
+                }
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(CLI),
+            "--date",
+            "2026-06-11",
+            "--output-root",
+            str(tmp_path / "outputs"),
+            "--evidence-map",
+            str(evidence_map),
+            "--dry-run",
+            "--skip-audio",
+            "--skip-render",
+        ],
+        text=True,
+        capture_output=True,
+        encoding="utf-8",
+    )
+
+    assert result.returncode == 0, result.stderr
+    output_dir = tmp_path / "outputs" / "2026-06-11"
+    timeline = json.loads((output_dir / "script" / "timeline.json").read_text(encoding="utf-8"))
+    by_id = {scene["id"]: scene for scene in timeline["scenes"]}
+    assert by_id["principle"]["image_file"] == "assets/evidence/principle.png"
+    assert by_id["principle"]["image_source_url"].startswith("https://")
+    evidence = json.loads((output_dir / "assets" / "evidence-visuals.json").read_text(encoding="utf-8"))
+    assert evidence["attached_count"] == 1
 
 
 def test_cli_dry_run_accepts_custom_topic(tmp_path: Path):

@@ -57,7 +57,13 @@ export const EditorialFrame: React.FC<{scene: Scene; column: string; title: stri
         <KineticHeadline text={scene.onScreenText} accent={accent} />
         {scene.imageFile ? (
           <div style={{marginTop: 44}}>
-            <SceneImage imageFile={scene.imageFile} imageAlt={scene.imageAlt ?? "AI generated scene visual"} accent={accent} />
+            <SceneImage
+              imageFile={scene.imageFile}
+              imageAlt={scene.imageAlt ?? "AI generated scene visual"}
+              imageAttribution={scene.imageAttribution}
+              imageRole={scene.imageRole}
+              accent={accent}
+            />
           </div>
         ) : null}
         <div style={{marginTop: scene.imageFile ? 38 : 70}}>

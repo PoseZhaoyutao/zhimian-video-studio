@@ -7,9 +7,18 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+EVIDENCE_RIGHTS_BASES = {
+    "licensed",
+    "public-domain",
+    "official-documentation",
+    "paper-commentary",
+    "tutorial-commentary",
+    "self-redrawn",
+}
 
 
 def autogenerate_images(
@@ -151,4 +160,116 @@ def package_scene_images(
         "fallback": "motion-only",
     }
     _write_json(plan_path, report)
+    return report
+
+
+def package_evidence_images(
+    scenes: list[dict[str, Any]],
+    evidence_map_path: Path | None,
+    output_dir: Path,
+) -> dict[str, Any]:
+    """Package web-sourced or redrawn evidence visuals with provenance.
+
+    Evidence images take precedence over generated images for matching scene ids.
+    The caller is responsible for downloading or redrawing the approved source;
+    this function keeps the local packaging step deterministic and auditable.
+    """
+
+    manifest_path = output_dir / "assets" / "evidence-visuals.json"
+    if evidence_map_path is None:
+        report: dict[str, Any] = {
+            "status": "not_provided",
+            "requested_count": 0,
+            "attached_count": 0,
+            "entries": [],
+            "fallback": "generated-image-or-motion-only",
+        }
+        _write_json(manifest_path, report)
+        return report
+
+    evidence_map_path = evidence_map_path.expanduser().resolve()
+    if not evidence_map_path.is_file():
+        raise FileNotFoundError(evidence_map_path)
+    payload = json.loads(evidence_map_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("evidence map must be a JSON object keyed by scene id")
+
+    scenes_by_id = {str(scene.get("id")): scene for scene in scenes}
+    unknown = sorted(set(map(str, payload)) - set(scenes_by_id))
+    if unknown:
+        raise ValueError(f"evidence map contains unknown scene id(s): {', '.join(unknown)}")
+
+    evidence_dir = output_dir / "assets" / "evidence"
+    entries: list[dict[str, Any]] = []
+    for scene_id, raw_entry in payload.items():
+        if not isinstance(raw_entry, dict):
+            raise ValueError(f"evidence map entry {scene_id!r} must be an object")
+
+        source_value = raw_entry.get("path")
+        if not isinstance(source_value, str) or not source_value.strip():
+            raise ValueError(f"evidence map entry {scene_id!r} requires path")
+        source = Path(source_value).expanduser()
+        if not source.is_absolute():
+            source = evidence_map_path.parent / source
+        source = source.resolve()
+        if not source.is_file():
+            raise FileNotFoundError(source)
+        extension = source.suffix.lower()
+        if extension not in SUPPORTED_IMAGE_EXTENSIONS:
+            raise ValueError("evidence images must be PNG, JPEG, or WebP")
+
+        required_text = ("alt", "source_url", "source_title", "rights_basis")
+        values = {key: str(raw_entry.get(key) or "").strip() for key in required_text}
+        for key, value in values.items():
+            if not value:
+                raise ValueError(f"evidence map entry {scene_id!r} requires {key}")
+        parsed = urlparse(values["source_url"])
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError(f"evidence map entry {scene_id!r} source_url must use http or https")
+        if values["rights_basis"] not in EVIDENCE_RIGHTS_BASES:
+            allowed = ", ".join(sorted(EVIDENCE_RIGHTS_BASES))
+            raise ValueError(f"evidence map entry {scene_id!r} rights_basis must be one of: {allowed}")
+
+        license_text = str(raw_entry.get("license") or "not-stated").strip()
+        attribution = str(raw_entry.get("attribution") or values["source_title"]).strip()
+        role = str(raw_entry.get("role") or "tutorial").strip()
+
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        destination = evidence_dir / f"{_safe_scene_name(str(scene_id))}{extension}"
+        shutil.copy2(source, destination)
+        relative = destination.relative_to(output_dir).as_posix()
+        scene = scenes_by_id[str(scene_id)]
+        scene.update(
+            image_file=relative,
+            image_alt=values["alt"],
+            image_source_url=values["source_url"],
+            image_source_title=values["source_title"],
+            image_license=license_text,
+            image_rights_basis=values["rights_basis"],
+            image_attribution=attribution,
+            image_role=role,
+        )
+        entries.append(
+            {
+                "scene_id": str(scene_id),
+                "status": "ready",
+                "file": relative,
+                "alt": values["alt"],
+                "source_url": values["source_url"],
+                "source_title": values["source_title"],
+                "license": license_text,
+                "rights_basis": values["rights_basis"],
+                "attribution": attribution,
+                "role": role,
+            }
+        )
+
+    report = {
+        "status": "ready" if entries else "not_provided",
+        "requested_count": len(payload),
+        "attached_count": len(entries),
+        "entries": entries,
+        "fallback": "generated-image-or-motion-only",
+    }
+    _write_json(manifest_path, report)
     return report
