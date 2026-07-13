@@ -8,7 +8,7 @@ export const sceneSchema = z.object({
   narration: z.string(),
   onScreenText: z.string(),
   caption: z.string(),
-  visualType: z.enum(["editorial", "code", "process", "flow", "comparison", "formula"]),
+  visualType: z.enum(["editorial", "code", "process", "flow", "comparison", "formula", "ring", "nodegraph", "pathflow", "formulamorph"]),
   visualPayload: z.record(z.string(), z.unknown()).default({}),
   audioFile: z.string().optional(),
   imageFile: z.string().optional(),
@@ -17,6 +17,7 @@ export const sceneSchema = z.object({
   imageAttribution: z.string().optional(),
   imageRightsBasis: z.string().optional(),
   imageRole: z.string().optional(),
+  sourceRefs: z.array(z.string()).optional(),
 });
 
 export const videoSchema = z.object({

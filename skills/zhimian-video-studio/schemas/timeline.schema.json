@@ -32,13 +32,7 @@
           "audio_file": {"type": "string"},
           "image_file": {"type": "string"},
           "image_alt": {"type": "string"},
-          "image_prompt": {"type": "string"},
-          "image_source_url": {"type": "string", "format": "uri"},
-          "image_source_title": {"type": "string"},
-          "image_license": {"type": "string"},
-          "image_rights_basis": {"type": "string"},
-          "image_attribution": {"type": "string"},
-          "image_role": {"type": "string"}
+          "image_prompt": {"type": "string"}
         },
         "additionalProperties": true
       }

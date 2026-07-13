@@ -3,7 +3,7 @@ import {AbsoluteFill, Sequence, staticFile} from "remotion";
 import {CaptionLayer} from "./components/Captions";
 import {EditorialFrame} from "./components/EditorialFrame";
 import {SceneWipe} from "./components/SceneWipe";
-import {categoryColor} from "./design";
+import {categoryColor, sceneTheme} from "./design";
 import type {VideoProps} from "./types";
 
 export const ZhiMianVideo: React.FC<VideoProps> = (props) => (
@@ -38,7 +38,7 @@ export const ZhiMianVideo: React.FC<VideoProps> = (props) => (
         durationInFrames={Math.min(25, scene.durationInFrames)}
         premountFor={15}
       >
-        <SceneWipe accent={categoryColor(props.column)} />
+        <SceneWipe accent={categoryColor(props.column)} theme={sceneTheme(scene.visualType)} />
       </Sequence>
     ))}
   </AbsoluteFill>

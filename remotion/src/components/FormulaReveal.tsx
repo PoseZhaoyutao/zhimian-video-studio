@@ -1,46 +1,110 @@
-import {interpolate, spring, useCurrentFrame, useVideoConfig} from "remotion";
-import {COLORS} from "../design";
+import {interpolate, useCurrentFrame} from "remotion";
+import {COLORS, EASE, glassStyle} from "../design";
 
 const clamp = {extrapolateLeft: "clamp", extrapolateRight: "clamp"} as const;
 
-export const FormulaReveal: React.FC<{payload: Record<string, unknown>; accent: string}> = ({payload, accent}) => {
+/**
+ * 公式展示 — 电影级数学可视化
+ *
+ * 设计哲学：
+ * - 公式作为焦点，清晰可读
+ * - 体积光强调重要性
+ * - 克制的动画，不抢视觉
+ */
+export const FormulaReveal: React.FC<{
+  payload: {formula: string; source?: string};
+  accent: string;
+  theme?: "dark" | "cream" | "ref";
+}> = ({payload, accent}) => {
   const frame = useCurrentFrame();
-  const {fps} = useVideoConfig();
-  const tokens = Array.isArray(payload.tokens)
-    ? payload.tokens.map(String)
-    : ["结论", "=", "条件", "+", "机制", "+", "边界"];
-  const underline = interpolate(frame, [16, 76], [0, 1], clamp);
+
+  // 入场动画
+  const enter = interpolate(frame, [0, 40], [0, 1], {
+    ...clamp,
+    easing: EASE.inertial,
+  });
+  const enterY = (1 - enter) * 40;
+  const enterScale = 0.9 + enter * 0.1;
+
+  // 体积光呼吸
+  const glowPulse = (Math.sin(frame / 80) + 1) / 2;
+  const glowOpacity = 0.15 + glowPulse * 0.1;
+
+  // 来源标签
+  const sourceEnter = interpolate(frame, [30, 60], [0, 1], {
+    ...clamp,
+    easing: EASE.standard,
+  });
 
   return (
-    <div style={{backgroundColor: COLORS.ink, color: COLORS.paper, borderRadius: 34, padding: "44px 38px 38px", borderTop: `16px solid ${accent}`, boxShadow: "0 18px 0 rgba(21,21,21,0.14)"}}>
-      <div style={{fontSize: 30, color: accent, fontWeight: 950, marginBottom: 28}}>MENTAL MODEL</div>
-      <div style={{display: "flex", flexWrap: "wrap", gap: 16}}>
-        {tokens.map((token, index) => {
-          const appear = spring({frame: frame - index * 8, fps, config: {damping: 16, stiffness: 130}});
-          const active = frame >= index * 8 + 8 && frame < index * 8 + 26;
-          return (
-            <span
-              key={`${token}-${index}`}
-              style={{
-                display: "inline-block",
-                opacity: Math.max(0, Math.min(1, appear)),
-                transform: `translateY(${(1 - appear) * 26}px) scale(${0.92 + Math.min(1, appear) * 0.08})`,
-                padding: token.length <= 1 ? "18px 12px" : "18px 24px",
-                borderRadius: 22,
-                backgroundColor: active ? accent : "rgba(255,253,247,0.12)",
-                color: active ? COLORS.paper : COLORS.paper,
-                fontSize: token.length <= 1 ? 46 : 40,
-                fontWeight: 950,
-              }}
-            >
-              {token}
-            </span>
-          );
-        })}
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 24,
+        width: "100%",
+        position: "relative",
+      }}
+    >
+      {/* 体积光背景 */}
+      <div
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          width: 600,
+          height: 300,
+          transform: "translate(-50%, -50%)",
+          background: `radial-gradient(ellipse at center, ${accent}${Math.round(glowOpacity * 255).toString(16).padStart(2, "0")} 0%, transparent 70%)`,
+          filter: "blur(60px)",
+          opacity: enter,
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* 公式卡片 */}
+      <div
+        style={{
+          ...glassStyle(0.7),
+          padding: "48px 64px",
+          opacity: enter,
+          transform: `translateY(${enterY}px) scale(${enterScale})`,
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 56,
+            fontWeight: 700,
+            color: COLORS.textPrimary,
+            fontFamily: '"Cascadia Code", "SF Mono", monospace',
+            letterSpacing: "-0.02em",
+            textShadow: `0 0 20px ${accent}40`,
+          }}
+        >
+          {payload.formula}
+        </div>
       </div>
-      <div style={{height: 10, backgroundColor: "rgba(255,253,247,0.16)", borderRadius: 999, marginTop: 36, overflow: "hidden"}}>
-        <div style={{height: "100%", width: `${underline * 100}%`, backgroundColor: accent}} />
-      </div>
+
+      {/* 来源标签 */}
+      {payload.source && (
+        <div
+          style={{
+            ...glassStyle(0.4),
+            fontSize: 22,
+            fontWeight: 600,
+            color: COLORS.textSecondary,
+            padding: "8px 20px",
+            borderRadius: 12,
+            opacity: sourceEnter,
+            transform: `translateY(${(1 - sourceEnter) * 20}px)`,
+          }}
+        >
+          {payload.source}
+        </div>
+      )}
     </div>
   );
 };

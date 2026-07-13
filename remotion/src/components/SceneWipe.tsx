@@ -1,55 +1,73 @@
 import {AbsoluteFill, interpolate, useCurrentFrame} from "remotion";
-import {COLORS} from "../design";
+import {COLORS, EASE} from "../design";
 
 const clamp = {extrapolateLeft: "clamp", extrapolateRight: "clamp"} as const;
 
-export const SceneWipe: React.FC<{accent: string}> = ({accent}) => {
+/**
+ * 场景转场 — 电影级径向遮罩
+ *
+ * 设计哲学：
+ * - 平滑过渡，不突兀
+ * - 体积光增强空间感
+ * - 克制的动画
+ */
+export const SceneWipe: React.FC<{
+  accent: string;
+  theme?: "dark" | "cream" | "ref";
+}> = () => {
   const frame = useCurrentFrame();
-  const panelX = interpolate(frame, [0, 5, 20], [0, 0, 1160], clamp);
-  const stripeX = interpolate(frame, [0, 8, 24], [-180, -180, 1240], clamp);
-  const labelOpacity = interpolate(frame, [0, 4, 12, 18], [0, 1, 1, 0], clamp);
-  const labelX = interpolate(frame, [0, 12], [-36, 24], clamp);
 
-  if (frame > 24) {
+  // 30帧后返回null
+  if (frame > 30) {
     return null;
   }
 
+  // 径向遮罩扩散
+  const scale = interpolate(frame, [0, 30], [0, 1.2], {
+    ...clamp,
+    easing: EASE.dramatic,
+  });
+
+  // 透明度
+  const opacity = interpolate(frame, [0, 15, 30], [0, 0.9, 0], {
+    ...clamp,
+    easing: EASE.dramatic,
+  });
+
   return (
-    <AbsoluteFill style={{pointerEvents: "none", zIndex: 40, overflow: "hidden"}}>
+    <AbsoluteFill
+      style={{
+        pointerEvents: "none",
+        zIndex: 40,
+        overflow: "hidden",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {/* 主体径向遮罩 */}
       <div
         style={{
-          position: "absolute",
-          inset: 0,
-          backgroundColor: accent,
-          transform: `translateX(${panelX}px)`,
+          width: 2800,
+          height: 2800,
+          borderRadius: "50%",
+          background: `radial-gradient(circle at center, ${COLORS.space} 0%, ${COLORS.spaceDeep} 70%, transparent 100%)`,
+          transform: `scale(${scale})`,
+          opacity,
         }}
       />
+      {/* 体积光边缘 */}
       <div
         style={{
           position: "absolute",
-          top: 0,
-          bottom: 0,
-          left: 0,
-          width: 180,
-          backgroundColor: COLORS.ink,
-          transform: `translateX(${stripeX}px) skewX(-8deg)`,
+          width: 2800,
+          height: 2800,
+          borderRadius: "50%",
+          border: `3px solid ${COLORS.primary}40`,
+          boxShadow: `0 0 60px ${COLORS.primaryGlow}`,
+          transform: `scale(${scale})`,
+          opacity: opacity * 0.6,
         }}
       />
-      <div
-        style={{
-          position: "absolute",
-          left: 90,
-          bottom: 190,
-          color: COLORS.paper,
-          fontSize: 34,
-          fontWeight: 950,
-          letterSpacing: 6,
-          opacity: labelOpacity,
-          transform: `translateX(${labelX}px)`,
-        }}
-      >
-        ZHIMIAN / NEXT
-      </div>
     </AbsoluteFill>
   );
 };

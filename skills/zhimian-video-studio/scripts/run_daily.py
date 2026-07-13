@@ -12,8 +12,7 @@ from datetime import date
 from pathlib import Path
 
 from zhimian.calendar import topic_for_day
-from zhimian.editing import load_edit_plan, render_edit
-from zhimian.images import autogenerate_images, package_evidence_images, package_scene_images
+from zhimian.images import package_scene_images
 from zhimian.planner import custom_topic, generate_content_plan, load_plan_topic, write_content_plan
 from zhimian.qa import run_qa
 from zhimian.remotion import build_render_command, build_still_command
@@ -23,12 +22,6 @@ from zhimian.workspace import prepare_run
 
 
 FPS = 30
-
-# A neutral line spoken once in the default male-narrator style to mint a
-# synthetic voice anchor. When --unify-timbre is set, every segment is then
-# conditioned on this single clip so the whole video keeps one timbre. The
-# anchor is AI-designed from a text prompt and does not clone a real person.
-VOICE_ANCHOR_TEXT = "智面引擎，用程序化视频把专业知识讲清楚，让每个行业都能做出可信的科普内容。"
 
 
 def _write(path: Path, text: str) -> None:
@@ -60,25 +53,6 @@ def _concat_wavs(paths: list[Path], output: Path) -> None:
         for path in paths:
             with wave.open(str(path), "rb") as segment:
                 combined.writeframes(segment.readframes(segment.getnframes()))
-
-
-def _ensure_voice_anchor(output_dir: Path) -> Path:
-    """Mint (or reuse) one synthetic male-narrator clip and return its path.
-
-    The clip is generated prompt-only in the default voice, then reused as the
-    fixed ``reference_wav_path`` for every segment so the narration keeps a
-    single consistent timbre. It is AI-designed synthetic audio, not a clone of
-    a real person, which is why ``authorized_voice_clone`` is permitted for it.
-    """
-    anchor_path = output_dir / "audio" / "voice-anchor.wav"
-    if anchor_path.exists() and anchor_path.stat().st_size > 0:
-        return anchor_path
-    staging = output_dir / "audio" / "_anchor"
-    anchor = VoxAdapter().generate_segments([VOICE_ANCHOR_TEXT], staging)[0]
-    anchor_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(anchor.path, anchor_path)
-    shutil.rmtree(staging, ignore_errors=True)
-    return anchor_path
 
 
 def _repo_root() -> Path:
@@ -143,9 +117,6 @@ def _remotion_props(topic: dict[str, str | int], scenes: list[dict]) -> dict:
                 "imageFile": scene.get("image_static_file", scene.get("image_file")),
                 "imageAlt": scene.get("image_alt"),
                 "imagePrompt": scene.get("image_prompt"),
-                "imageAttribution": scene.get("image_attribution"),
-                "imageRightsBasis": scene.get("image_rights_basis"),
-                "imageRole": scene.get("image_role"),
             }
         )
         captions.append(
@@ -265,7 +236,8 @@ def _draft_scenes(topic: dict[str, str | int]) -> list[dict]:
         ]
     angle = str(topic.get("angle") or "把一个具体问题拆成可验证、可复用、可追问的回答框架。")
     return [
-        {"id": "hook", "narration": f"今天拆一个高频问题：{title}。别只背答案，我们要看面试官真正想追问什么。", "on_screen_text": title, "caption": title, "visual_type": "comparison", "visual_payload": {"left": "背答案", "right": "讲机制", "winner": "right"}, "source_refs": ["S1"]},
+        # Hook 必须含钩子词+冲突/数字范式，禁止"今天讲/面试官问"开场（详见 references/editorial-style.md）
+        {"id": "hook", "narration": f"{title}，90%的人开口就答错——被追问一句机制就哑了。别只背答案，今天一条线讲透：原题、原理、追问、高分回答，45秒搞定。", "on_screen_text": f"{title}｜90%开口答错", "caption": "别只背答案，讲清机制。", "visual_type": "comparison", "visual_payload": {"left": "背答案", "right": "讲机制", "winner": "right"}, "source_refs": ["S1"]},
         {"id": "intuition", "narration": "先给直觉：一个好回答，应该从问题入口，一路走到关键变量、底层原因和落地取舍。", "on_screen_text": "先看问题怎么流动", "caption": "先给直觉，再看底层原因。", "visual_type": "flow", "visual_payload": {"steps": ["问题入口", "关键变量", "底层原因", "落地取舍"]}, "source_refs": ["S1"]},
         {"id": "principle", "narration": f"这一期的核心切口是：{angle}", "on_screen_text": "把直觉压成一句公式", "caption": "把直觉压成一句可复查的公式。", "visual_type": "formula", "visual_payload": {"tokens": ["结论", "=", "条件", "+", "机制", "+", "边界"]}, "source_refs": ["S1"]},
         {"id": "followups", "narration": "真正拉开差距的是连续追问：为什么这样设计？复杂度或成本是多少？边界情况会不会翻车？", "on_screen_text": "追问链决定上限", "caption": "真正拉开差距的是连续追问。", "visual_type": "code", "visual_payload": {"code": "Q1: 为什么这样设计？\nQ2: 复杂度 / 成本是多少？\nQ3: 边界情况会不会翻车？"}, "source_refs": ["S1"]},
@@ -281,9 +253,6 @@ def _is_skill_recommendation_topic(topic: dict[str, str | int]) -> bool:
 
 
 def _topic_benefit(topic: dict[str, str | int]) -> str:
-    benefit = topic.get("benefit")
-    if benefit:
-        return str(benefit)
     if _is_skill_recommendation_topic(topic):
         return "把好用 AI 技能变成行业科普生产线"
     return "60 秒拆出面试官真正想追问的技术细节"
@@ -346,35 +315,33 @@ def _write_platform_copy(output_dir: Path, topic: dict[str, str | int]) -> None:
         for filename, content in copies.items():
             _write(output_dir / "copy" / filename, content)
         return
+    # 四层标签配方见 references/editorial-style.md：L1品牌+L2核心(面试/AI算法)+L3选题词+L4流量词
+    # L4 流量词是历史视频缺失项，直接导致推荐流量起不来
     copies = {
-        "xiaohongshu.md": f"# {title}｜技术面试高频追问\n\n标签：#技术面试 #AI面试 #后端 #算法 #智面引擎\n\n描述：先收藏这一期，按原题、原理、追问、回答骨架复习。\n",
-        "douyin.md": f"# 面试官问{title}，别只背答案\n\n标签：#大厂面试 #程序员 #AI学习 #后端 #算法\n\n描述：真正加分的是能解释为什么。你还想看哪个追问？\n",
-        "bilibili.md": f"# {title}：大厂技术面试追问链拆解\n\n标签：技术面试,后端开发,算法,AI,求职\n\n描述：本期包含原题、底层原理、连续追问和高分回答骨架。配音为AI生成，仅供学习复盘。\n",
+        "xiaohongshu.md": (
+            f"# {title}｜90%的人开口答错\n\n"
+            f"本期拆 {title}：不背一句话答案，按原题→原理→追问→高分骨架拆解。\n\n"
+            f"建议收藏后按结构复述一遍。\n\n"
+            f"你被问过哪道相关题被卡住？评论区扣出来，下期直接拆。\n\n"
+            "标签：#面试 #AI算法 #智面引擎 #大模型面试 #算法岗 #秋招 #面试经验 #面经\n"
+        ),
+        "douyin.md": (
+            f"# {title}｜90%开口答错\n\n"
+            f"别只背答案，真正加分的是讲清机制和取舍。\n\n"
+            f"你被追问过哪道相关题？评论区告诉我。\n\n"
+            "标签：#面试 #AI算法 #智面引擎 #大模型面试 #秋招 #算法岗\n"
+        ),
+        "bilibili.md": (
+            f"# {title}｜面试高频追问链拆解\n\n"
+            f"本期围绕 {title} 拆解面试原题、底层机制、连续追问和高分回答骨架。\n\n"
+            "适合：AI算法、机器学习、深度学习和大模型岗位求职者。\n"
+            "配音说明：使用本地 VoxCPM2 生成的 AI 合成男声，不涉及真人音色克隆。\n\n"
+            f"你被问过哪道相关题被卡住？评论区扣出来，下期直接拆。\n\n"
+            "标签：面试,AI算法,智面引擎,大模型面试,算法岗,秋招,面试经验,面经\n"
+        ),
     }
     for filename, content in copies.items():
         _write(output_dir / "copy" / filename, content)
-
-
-def _load_scenes_file(path: Path) -> list[dict]:
-    """Load a hand-authored scene list for a custom episode (e.g. a tutorial).
-
-    Accepts either a bare JSON list of scenes or an object with a ``scenes`` key.
-    Each scene needs at least ``id`` and non-empty ``narration``; the remaining
-    fields default so the timeline/render contract stays satisfied.
-    """
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
-    scenes = data["scenes"] if isinstance(data, dict) else data
-    if not isinstance(scenes, list) or not scenes:
-        raise ValueError("scenes file must contain a non-empty list of scenes")
-    for index, scene in enumerate(scenes, start=1):
-        if "id" not in scene or not str(scene.get("narration", "")).strip():
-            raise ValueError(f"scene {index} requires 'id' and non-empty 'narration'")
-        scene.setdefault("on_screen_text", scene["narration"])
-        scene.setdefault("caption", scene["narration"])
-        scene.setdefault("visual_type", "editorial")
-        scene.setdefault("visual_payload", {})
-        scene.setdefault("source_refs", ["S1"])
-    return scenes
 
 
 def _select_topic(args: argparse.Namespace, run_date: str) -> dict[str, str | int]:
@@ -388,12 +355,6 @@ def _select_topic(args: argparse.Namespace, run_date: str) -> dict[str, str | in
 
 def run(args: argparse.Namespace) -> Path:
     run_date = args.date or date.today().isoformat()
-    if args.edit_plan:
-        plan = load_edit_plan(Path(args.edit_plan))
-        output = Path(args.edit_output) if args.edit_output else Path(args.output_root) / "edits" / f"{run_date}-edit.mp4"
-        render_edit(plan, output)
-        print(output)
-        return output
     if args.make_plan:
         plan_start = args.plan_start or run_date
         plan = generate_content_plan(
@@ -412,47 +373,13 @@ def run(args: argparse.Namespace) -> Path:
         return workspace.output_dir
 
     topic = _select_topic(args, run_date)
-    if args.benefit:
-        topic["benefit"] = args.benefit
     workspace.update_manifest(status="dry_run" if args.dry_run else "in_progress", stage="planned", topic=topic, mode=args.mode)
 
     _write_sources(workspace.output_dir, topic)
-    _write(
-        workspace.output_dir / "research" / "visual-search.md",
-        "# Visual search\n\nNo agent-mediated visual search record was supplied for this CLI run.\n",
-    )
-    scenes = _load_scenes_file(Path(args.scenes_file)) if args.scenes_file else _draft_scenes(topic)
-
-    image_map_path = Path(args.image_map) if args.image_map else None
-    if args.image_gen_cmd:
-        # Pluggable 智能生图: run the user's image-gen command per scene prompt,
-        # then merge with any explicit --image-map (explicit entries win), and
-        # fall back to motion-only for scenes the command could not produce.
-        auto_map, gen_failures = autogenerate_images(
-            scenes, args.image_gen_cmd, workspace.output_dir / "assets" / "_autogen"
-        )
-        merged: dict = dict(auto_map)
-        if image_map_path:
-            explicit = json.loads(image_map_path.read_text(encoding="utf-8"))
-            for scene_id, entry in explicit.items():
-                source = Path(str(entry.get("path", ""))).expanduser()
-                if not source.is_absolute():
-                    source = image_map_path.parent / source
-                merged[scene_id] = {**entry, "path": str(source.resolve())}
-        if merged:
-            resolved_path = workspace.output_dir / "assets" / "image-map.resolved.json"
-            _write_json(resolved_path, merged)
-            image_map_path = resolved_path
-        if gen_failures:
-            _write(
-                workspace.output_dir / "logs" / "image-gen.log",
-                "\n".join(f"{f['scene_id']}: {f['reason']}" for f in gen_failures) + "\n",
-            )
-
-    package_scene_images(scenes, image_map_path, workspace.output_dir)
-    package_evidence_images(
+    scenes = _draft_scenes(topic)
+    package_scene_images(
         scenes,
-        Path(args.evidence_map) if args.evidence_map else None,
+        Path(args.image_map) if args.image_map else None,
         workspace.output_dir,
     )
     _write(workspace.output_dir / "script" / "narration.md", "\n".join(scene["narration"] for scene in scenes) + "\n")
@@ -466,11 +393,7 @@ def run(args: argparse.Namespace) -> Path:
             _scene["audio_duration"] = 10.0
             _scene["audio_file"] = f"generated/{run_date}/{index:02d}.wav"
     else:
-        if args.unify_timbre:
-            anchor = _ensure_voice_anchor(workspace.output_dir)
-            adapter = VoxAdapter(reference_audio=anchor, authorized_voice_clone=True)
-        else:
-            adapter = VoxAdapter()
+        adapter = VoxAdapter()
         outputs = adapter.generate_segments([scene["narration"] for scene in scenes], workspace.output_dir / "audio" / "segments")
         for scene, audio in zip(scenes, outputs, strict=True):
             segment_paths.append(audio.path)
@@ -526,38 +449,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--skip-audio", action="store_true", help="Use silent placeholder WAV files")
     parser.add_argument("--skip-render", action="store_true", help="Use placeholder video and cover files")
     parser.add_argument("--image-map", help="JSON map of scene ids to model-generated local image files")
-    parser.add_argument(
-        "--evidence-map",
-        help="JSON map of scene ids to downloaded or redrawn tutorial/experiment visuals with provenance",
-    )
-    parser.add_argument(
-        "--unify-timbre",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Unify the whole video's timbre via one synthetic male-narrator anchor (default: on). "
-             "Use --no-unify-timbre only when the user explicitly wants per-segment independent voices.",
-    )
-    parser.add_argument(
-        "--scenes-file",
-        help="JSON file of hand-authored scenes (for custom episodes such as tutorials) instead of the auto-drafted script",
-    )
-    parser.add_argument(
-        "--benefit",
-        help="Override the cover benefit line for a custom episode",
-    )
-    parser.add_argument(
-        "--image-gen-cmd",
-        help="Pluggable 智能生图 command template with {prompt} and {out} placeholders; "
-             "run per scene image_prompt, with motion-only fallback when it fails",
-    )
-    parser.add_argument(
-        "--edit-plan",
-        help="Run the local video editor on this JSON edit plan (concat/crossfade/overlay/music) and exit",
-    )
-    parser.add_argument(
-        "--edit-output",
-        help="Output path for --edit-plan (default: <output-root>/edits/<date>-edit.mp4)",
-    )
     return parser
 
 

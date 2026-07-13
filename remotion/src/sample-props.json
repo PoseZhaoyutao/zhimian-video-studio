@@ -1,0 +1,350 @@
+{
+  "title": "动态规划",
+  "column": "大厂拆招·AI算法",
+  "episode": "EP.DP",
+  "benefit": "不背方程，讲清最优子结构",
+  "scenes": [
+    {
+      "id": "hook",
+      "startFrame": 0,
+      "durationInFrames": 350,
+      "endFrame": 350,
+      "narration": "动态规划，大厂算法面试考得最多、也最容易翻车。因为大部分人只会背状态转移方程，却讲不清楚最优子结构到底在做什么。今天一条线拆透。",
+      "onScreenText": "动态规划\n90%的人只会背方程",
+      "caption": "大部分人只会背方程，讲不清最优子结构。",
+      "visualType": "nodegraph",
+      "visualPayload": {
+        "nodes": [
+          {
+            "id": "dp",
+            "label": "动态规划",
+            "x": 50,
+            "y": 8,
+            "active": true
+          },
+          {
+            "id": "os",
+            "label": "最优子结构",
+            "x": 20,
+            "y": 32,
+            "active": true
+          },
+          {
+            "id": "ol",
+            "label": "重叠子问题",
+            "x": 80,
+            "y": 32,
+            "active": false
+          },
+          {
+            "id": "bd",
+            "label": "边界条件",
+            "x": 20,
+            "y": 58,
+            "active": false
+          },
+          {
+            "id": "st",
+            "label": "状态转移",
+            "x": 50,
+            "y": 82,
+            "active": true
+          },
+          {
+            "id": "tc",
+            "label": "时间复杂度",
+            "x": 80,
+            "y": 58,
+            "active": false
+          }
+        ],
+        "edges": [
+          {
+            "from": "dp",
+            "to": "os"
+          },
+          {
+            "from": "dp",
+            "to": "ol"
+          },
+          {
+            "from": "os",
+            "to": "bd"
+          },
+          {
+            "from": "os",
+            "to": "st"
+          },
+          {
+            "from": "ol",
+            "to": "st"
+          },
+          {
+            "from": "st",
+            "to": "tc"
+          }
+        ]
+      },
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ]
+    },
+    {
+      "id": "definition",
+      "startFrame": 350,
+      "durationInFrames": 382,
+      "endFrame": 732,
+      "narration": "先给定义。动态规划是一类通过把原问题拆成重叠子问题、把每个子问题的解存起来避免重复计算、最终用状态转移方程从小到大推出全局最优解的算法范式。",
+      "onScreenText": "DP = 拆问题 + 存解 + 推最优",
+      "caption": "三个关键字：拆、存、推。",
+      "visualType": "pathflow",
+      "visualPayload": {
+        "label": "DP 的数据处理流",
+        "nodes": [
+          {
+            "id": "input",
+            "label": "原问题",
+            "x": 8,
+            "y": 50,
+            "color": "#6C63FF",
+            "sizeChange": 1
+          },
+          {
+            "id": "decompose",
+            "label": "拆分子问题",
+            "x": 30,
+            "y": 50,
+            "color": "#38BDF8",
+            "sizeChange": 1.3
+          },
+          {
+            "id": "memo",
+            "label": "存入备忘录",
+            "x": 55,
+            "y": 50,
+            "color": "#A855F7",
+            "sizeChange": 0.8
+          },
+          {
+            "id": "transfer",
+            "label": "状态转移",
+            "x": 78,
+            "y": 50,
+            "color": "#F59E0B",
+            "sizeChange": 1.2
+          },
+          {
+            "id": "output",
+            "label": "全局最优",
+            "x": 95,
+            "y": 50,
+            "color": "#6C63FF",
+            "sizeChange": 1
+          }
+        ]
+      },
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ]
+    },
+    {
+      "id": "fib",
+      "startFrame": 732,
+      "durationInFrames": 420,
+      "endFrame": 1152,
+      "narration": "用斐波那契数列来理解。递归解法的时间复杂度是 O(2^n)，因为大量子问题被重复计算。DP 的做法是从 F(0) 和 F(1) 开始，一步步往前推，时间降到 O(n)。",
+      "onScreenText": "斐波那契：递归 vs DP",
+      "caption": "递归 O(2^n)，DP O(n)，差距来自重叠子问题。",
+      "visualType": "comparison",
+      "visualPayload": {
+        "left": "递归 O(2^n)\n大量重复计算",
+        "right": "DP O(n)\n每个子问题只算一次",
+        "winner": "right"
+      },
+      "sourceRefs": [
+        "S1",
+        "S3"
+      ]
+    },
+    {
+      "id": "formulamorph",
+      "startFrame": 1152,
+      "durationInFrames": 404,
+      "endFrame": 1556,
+      "narration": "状态转移方程是这个：dp[i] 等于 dp[i-1] + dp[i-2]。变量之间的依赖关系很清晰——当前位置只依赖前两个位置的解。这就是最优子结构的含义。",
+      "onScreenText": "状态转移方程推导",
+      "caption": "dp[i] = dp[i-1] + dp[i-2]，依赖关系清晰。",
+      "visualType": "formulamorph",
+      "visualPayload": {
+        "steps": [
+          {
+            "tokens": [
+              {
+                "text": "dp",
+                "highlight": true
+              },
+              {
+                "text": "[i]"
+              },
+              {
+                "text": " = "
+              },
+              {
+                "text": "dp",
+                "highlight": false
+              },
+              {
+                "text": "[i-1]"
+              },
+              {
+                "text": " + "
+              },
+              {
+                "text": "dp",
+                "highlight": false
+              },
+              {
+                "text": "[i-2]"
+              }
+            ],
+            "label": "定义"
+          },
+          {
+            "tokens": [
+              {
+                "text": "i-1"
+              },
+              {
+                "text": " 依赖 "
+              },
+              {
+                "text": "i-2"
+              },
+              {
+                "text": " 和 "
+              },
+              {
+                "text": "i-3"
+              }
+            ],
+            "label": "递推"
+          },
+          {
+            "tokens": [
+              {
+                "text": "dp",
+                "highlight": true
+              },
+              {
+                "text": "[0]"
+              },
+              {
+                "text": "=0,  "
+              },
+              {
+                "text": "dp",
+                "highlight": true
+              },
+              {
+                "text": "[1]"
+              },
+              {
+                "text": "=1"
+              }
+            ],
+            "label": "边界"
+          },
+          {
+            "tokens": [
+              {
+                "text": "O",
+                "highlight": true
+              },
+              {
+                "text": "(n)"
+              },
+              {
+                "text": " 时间，"
+              },
+              {
+                "text": "O",
+                "highlight": true
+              },
+              {
+                "text": "(n)"
+              },
+              {
+                "text": " 空间"
+              }
+            ],
+            "label": "复杂度"
+          }
+        ]
+      },
+      "sourceRefs": [
+        "S1"
+      ]
+    },
+    {
+      "id": "climbing",
+      "startFrame": 1556,
+      "durationInFrames": 415,
+      "endFrame": 1971,
+      "narration": "再看经典的爬楼梯。每次可以走一步或两步，问走到第 n 阶有多少种走法。状态转移方程完全一样，只是语义变成了台阶数。面试中举一反三的关键就是看透这层结构同构。",
+      "onScreenText": "爬楼梯：同一方程\n不同语义",
+      "caption": "方程结构一样，语义变了，就是举一反三。",
+      "visualType": "process",
+      "visualPayload": {
+        "steps": [
+          "定义 dp[n] = 到第n阶的走法",
+          "dp[n] = dp[n-1] + dp[n-2]",
+          "dp[0]=1, dp[1]=1",
+          "答案 dp[n]"
+        ]
+      },
+      "sourceRefs": [
+        "S1",
+        "S2"
+      ]
+    },
+    {
+      "id": "followups",
+      "startFrame": 1971,
+      "durationInFrames": 431,
+      "endFrame": 2402,
+      "narration": "面试追问三件事：空间能优化吗？用滚动数组压到O(1)。每次走k步呢？状态转移变成前k项求和。怎么判断能不能用DP？两个条件：最优子结构和重叠子问题，缺一不可。",
+      "onScreenText": "追问：空间优化 + 推广 + 判定",
+      "caption": "滚动数组、k步推广、DP判定条件。",
+      "visualType": "flow",
+      "visualPayload": {
+        "steps": [
+          "O(n)→O(1) 滚动数组",
+          "k 步推广：前 k 项求和",
+          "最优子结构 + 重叠子问题"
+        ]
+      },
+      "sourceRefs": [
+        "S1",
+        "S2",
+        "S3"
+      ]
+    },
+    {
+      "id": "cta",
+      "startFrame": 2402,
+      "durationInFrames": 415,
+      "endFrame": 2817,
+      "narration": "总结：动态规划不是背方程，是掌握三个能力——把问题拆成子问题、找到状态转移的依赖关系、用边界条件启动递推。下期讲背包问题，把这套框架用在更复杂的场景上。",
+      "onScreenText": "DP = 拆 + 推 + 边界",
+      "caption": "下期：背包问题。关注不迷路。",
+      "visualType": "editorial",
+      "visualPayload": {},
+      "sourceRefs": [
+        "S1"
+      ]
+    }
+  ],
+  "captions": []
+}

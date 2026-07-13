@@ -12,7 +12,8 @@ import numpy as np
 
 DEFAULT_VOICE_PROMPT = os.environ.get(
     "VOXCPM2_VOICE_PROMPT",
-    "专业男性解说主播，清晰沉稳，有亲和力，适合科普与行业推广，停顿自然",
+    "温文尔雅的男性解说主播，声音温暖醇厚，语速适中从容不迫，吐字清晰自然，"
+    "带有学者气质，娓娓道来而不急不躁，适合深度科普与知识分享",
 )
 DEFAULT_MODEL_SOURCE = os.environ.get("VOXCPM2_MODEL_SOURCE", "openbmb/VoxCPM2")
 DEFAULT_PROJECT_PATH = Path(os.environ.get("VOXCPM2_PROJECT", r"D:\Project\VoxCPM2\VoxCPM"))
@@ -43,6 +44,41 @@ def _write_pcm16_wav(path: Path, samples: Any, sample_rate: int) -> None:
         audio.writeframes(pcm.tobytes())
 
 
+def _ffmpeg_denoise(src: Path, dst: Path) -> bool:
+    """ffmpeg post-process: gentle denoise + deess + dynaudnorm + warm EQ.
+
+    v4: lowered afftdn strength to avoid musical-noise artifacts (the
+    "water-drop / hiss" perceived as residual noise), swapped hard
+    compressor for dynaudnorm (more natural leveling), added deesser for
+    sibilance, and rolled off harsh 6 kHz region so the voice sounds
+    温文尔雅 instead of bright/hard.
+
+    Returns True on success, False if ffmpeg is unavailable.
+    """
+    import shutil as _sh
+    import subprocess as _sp
+    if not _sh.which("ffmpeg"):
+        return False
+    af = (
+        "highpass=f=100,"                       # cut low-frequency rumble
+        "lowpass=f=7500,"                       # cut TTS high-freq artifacts
+        "afftdn=nr=8:nf=-25,"                   # gentle FFT denoise (was nr=14 → musical noise)
+        "deesser=i=0.4,"                        # tame sibilance for warm tone (f is 0-1 normalized, use default)
+        "dynaudnorm=p=0.85:g=101:f=250,"        # natural loudness (replaces hard compressor)
+        "equalizer=f=3000:width_type=h:width=1200:g=2,"   # warm presence boost
+        "equalizer=f=200:width_type=h:width=150:g=-2,"    # reduce muddiness
+        "equalizer=f=6000:width_type=h:width=2000:g=-2,"  # roll off harshness
+        "volume=1.2dB"                          # slight gain
+    )
+    _sp.run(
+        ["ffmpeg", "-nostdin", "-y", "-loglevel", "error",
+         "-i", str(src), "-af", af, "-ar", str(_wav_info(src)[0]),
+         str(dst)],
+        check=True, capture_output=True, text=True, encoding="utf-8",
+    )
+    return True
+
+
 def _load_model(source: str, project_path: Path | None = None) -> Any:
     if project_path:
         source_dir = project_path / "src"
@@ -50,7 +86,7 @@ def _load_model(source: str, project_path: Path | None = None) -> Any:
             sys.path.insert(0, str(source_dir))
     from voxcpm import VoxCPM
 
-    return VoxCPM.from_pretrained(source, load_denoiser=False)
+    return VoxCPM.from_pretrained(source, load_denoiser=True)
 
 
 class VoxAdapter:
@@ -129,6 +165,12 @@ class VoxAdapter:
             sample_rate = int(model.tts_model.sample_rate)
             temporary = path.with_name(f"{path.stem}.tmp.wav")
             _write_pcm16_wav(temporary, samples, sample_rate)
-            os.replace(temporary, path)
+            # ffmpeg post-process denoise for cleaner audio
+            denoised = path.with_name(f"{path.stem}.denoised.wav")
+            if _ffmpeg_denoise(temporary, denoised):
+                os.replace(denoised, path)
+                temporary.unlink(missing_ok=True)
+            else:
+                os.replace(temporary, path)
             results.append(AudioSegment(path, len(samples) / sample_rate, sample_rate))
         return results

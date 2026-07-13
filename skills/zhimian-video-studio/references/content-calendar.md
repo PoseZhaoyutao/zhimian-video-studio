@@ -1,4 +1,4 @@
-﻿# 智面引擎内容规划协议
+# 智面引擎内容规划协议
 
 本 Skill 不再绑定某个账号的固定首月选题。内容选择优先级如下：
 
@@ -16,13 +16,13 @@
     {
       "date": "2026-06-18",
       "day": 1,
-      "column": "大厂拆招·AI算法",
-      "title": "Attention为什么要做缩放，复杂度怎么算",
+      "column": "AI实操",
+      "title": "把一个模糊需求变成可验收提示词",
       "audience": "技术求职者、程序员和AI学习者",
-      "theme": "AI算法技术面试",
-      "angle": "从方差、softmax饱和和O(n²d)复杂度回答面试追问。",
-      "source_queries": ["scaled dot product attention transformer paper"],
-      "visual_brief": "用公式揭示和矩阵流动动画解释QKᵀ与√d。"
+      "theme": "AI使用技巧与技术面试",
+      "angle": "用任务、上下文、约束、验收四块，把随口一句话改造成可执行提示词。",
+      "source_queries": ["prompt engineering official documentation"],
+      "visual_brief": "用流程动画展示需求从模糊到可验收的四步拆解。"
     }
   ]
 }
@@ -70,14 +70,10 @@ python skills/zhimian-video-studio/scripts/run_daily.py `
   --mode manual
 ```
 
-## 面试选题范围
-
-从 2026-06-19 起，默认“面试/大厂拆招”栏目只保留 AI 算法相关问题，包括机器学习、深度学习、Transformer/LLM、RAG、向量检索、训练推理、评估指标和模型优化。Redis、MySQL、TCP、缓存、队列、泛后端、常规系统设计、推荐流架构等非 AI 算法题，不再自动进入首月计划或兜底种子库。用户明确指定这些主题时，可以作为“自定义内容”处理，但不归入默认面试主线。
-
 ## 选题质量规则
 
 - 每个标题必须能落到一个清晰问题，不写“AI很强大”这种泛话题。
-- 面试类必须是 AI/算法相关，并包含技术细节追问：复杂度、边界、训练/推理成本、工程取舍、评估方式。
+- 大厂拆招类必须包含技术细节追问：复杂度、边界、故障、成本、工程取舍。
 - AI实操类必须包含可复用工作流：输入、步骤、约束、验收。
 - 每条计划都要给 `visual_brief`，指导 Remotion 选择流程、对比、公式或代码动画。
 - 自动任务没有用户输入时才使用内置种子库；种子库只是不断档兜底，不是固定首月排期。

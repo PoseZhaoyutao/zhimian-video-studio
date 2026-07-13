@@ -1,89 +1,108 @@
-import {interpolate, spring, useCurrentFrame, useVideoConfig} from "remotion";
-import {COLORS} from "../design";
+import {interpolate, useCurrentFrame} from "remotion";
+import {COLORS, EASE, glassStyle} from "../design";
 
 const clamp = {extrapolateLeft: "clamp", extrapolateRight: "clamp"} as const;
 
-export const FlowDiagram: React.FC<{payload: Record<string, unknown>; accent: string}> = ({payload, accent}) => {
+/**
+ * 流程图 — 电影级数据流可视化
+ *
+ * 设计哲学：
+ * - 数据流有方向感
+ * - 节点清晰可读
+ * - 克制的动画
+ */
+export const FlowDiagram: React.FC<{
+  payload: {nodes: string[]; connections?: number[][]};
+  accent: string;
+  theme?: "dark" | "cream" | "ref";
+}> = ({payload, accent}) => {
   const frame = useCurrentFrame();
-  const {fps} = useVideoConfig();
-  const steps = Array.isArray(payload.steps)
-    ? payload.steps.map(String)
-    : ["输入", "处理", "验证", "输出"];
-  const pulseX = interpolate(frame % 72, [0, 72], [0, 1], clamp);
+  const nodes = payload.nodes ?? ["输入", "处理", "输出"];
 
   return (
-    <div style={{position: "relative", height: 520, marginTop: 10}}>
-      <div
-        style={{
-          position: "absolute",
-          left: 34,
-          top: 58,
-          bottom: 60,
-          width: 8,
-          backgroundColor: "rgba(21,21,21,0.12)",
-        }}
-      />
-      {steps.map((step, index) => {
-        const appear = spring({frame: frame - index * 10, fps, config: {damping: 18, stiffness: 120}});
-        const connector = interpolate(frame, [index * 18 + 12, index * 18 + 42], [0, 1], clamp);
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 32,
+        width: "100%",
+        position: "relative",
+        padding: "40px 0",
+      }}
+    >
+      {nodes.map((node, i) => {
+        const delay = i * 18;
+        const enter = interpolate(frame, [delay, delay + 35], [0, 1], {
+          ...clamp,
+          easing: EASE.inertial,
+        });
+        const enterScale = 0.85 + enter * 0.15;
+        const enterOpacity = enter;
+
+        // 连接线
+        const lineGrow = interpolate(frame, [delay + 20, delay + 40], [0, 1], {
+          ...clamp,
+          easing: EASE.standard,
+        });
+
+        // 呼吸浮动
+        const floatY = Math.sin(frame / 100 + i * 0.6) * 4;
+
         return (
-          <div
-            key={`${step}-${index}`}
-            style={{
-              position: "absolute",
-              top: index * 112,
-              left: 0,
-              right: 0,
-              opacity: Math.max(0, Math.min(1, appear)),
-              transform: `translateX(${(1 - appear) * 76}px)`,
-            }}
-          >
-            <div style={{display: "grid", gridTemplateColumns: "76px 1fr", alignItems: "center", gap: 24}}>
+          <div key={i} style={{display: "flex", alignItems: "center", gap: 32}}>
+            {/* 节点 */}
+            <div
+              style={{
+                ...glassStyle(0.65),
+                padding: "32px 40px",
+                opacity: enterOpacity,
+                transform: `scale(${enterScale}) translateY(${floatY}px)`,
+                position: "relative",
+              }}
+            >
               <div
                 style={{
-                  width: 76,
-                  height: 76,
-                  borderRadius: 24,
-                  backgroundColor: accent,
-                  color: COLORS.paper,
-                  display: "grid",
-                  placeItems: "center",
-                  fontSize: 34,
-                  fontWeight: 950,
-                  boxShadow: `0 16px 0 rgba(21,21,21,0.14)`,
+                  fontSize: 32,
+                  fontWeight: 700,
+                  color: COLORS.textPrimary,
+                  textAlign: "center",
                 }}
               >
-                {index + 1}
+                {node}
               </div>
-              <div style={{position: "relative", backgroundColor: COLORS.paper, border: `4px solid ${COLORS.ink}`, borderRadius: 28, padding: "24px 30px", fontSize: 40, fontWeight: 900}}>
-                {step}
+            </div>
+
+            {/* 连接线 */}
+            {i < nodes.length - 1 && (
+              <div
+                style={{
+                  width: 60,
+                  height: 3,
+                  background: `linear-gradient(to right, ${accent}60, ${accent}20)`,
+                  transform: `scaleX(${lineGrow})`,
+                  transformOrigin: "left",
+                  borderRadius: 2,
+                  position: "relative",
+                }}
+              >
+                {/* 箭头 */}
                 <div
                   style={{
                     position: "absolute",
-                    left: 24,
-                    right: 24,
-                    bottom: -18,
-                    height: 8,
-                    backgroundColor: "rgba(21,21,21,0.1)",
+                    right: -8,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    width: 0,
+                    height: 0,
+                    borderLeft: `10px solid ${accent}60`,
+                    borderTop: "6px solid transparent",
+                    borderBottom: "6px solid transparent",
+                    opacity: lineGrow,
                   }}
-                >
-                  <div style={{height: "100%", width: `${connector * 100}%`, backgroundColor: accent}} />
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: `${Math.min(100, Math.max(0, pulseX * 100))}%`,
-                      top: -9,
-                      width: 26,
-                      height: 26,
-                      borderRadius: 999,
-                      backgroundColor: accent,
-                      transform: "translateX(-50%)",
-                      opacity: index < steps.length - 1 ? 0.9 : 0,
-                    }}
-                  />
-                </div>
+                />
               </div>
-            </div>
+            )}
           </div>
         );
       })}

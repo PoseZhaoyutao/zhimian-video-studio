@@ -1,67 +1,80 @@
-import {interpolate, spring, useCurrentFrame, useVideoConfig} from "remotion";
-import {COLORS} from "../design";
+import {interpolate, useCurrentFrame} from "remotion";
+import {COLORS, EASE} from "../design";
 
 const clamp = {extrapolateLeft: "clamp", extrapolateRight: "clamp"} as const;
-const BURST_ANGLES = [-78, -48, -18, 18, 48, 78];
 
-export const KineticHeadline: React.FC<{text: string; accent: string}> = ({text, accent}) => {
+/**
+ * 苹果级排版冲击力标题
+ *
+ * 设计哲学：
+ * - 超大字号，粗字重
+ * - 清晰的层级
+ * - 克制的动画
+ */
+export const KineticHeadline: React.FC<{
+  text: string;
+  accent: string;
+  theme?: "dark" | "cream" | "ref";
+}> = ({text, accent}) => {
   const frame = useCurrentFrame();
-  const {fps} = useVideoConfig();
-  const enter = spring({frame: frame - 5, fps, config: {damping: 15, stiffness: 150, mass: 0.8}});
-  const reveal = interpolate(frame, [4, 20], [0, 100], clamp);
-  const marker = interpolate(frame, [18, 34], [0, 1], clamp);
-  const burst = spring({frame: frame - 22, fps, config: {damping: 12, stiffness: 190, mass: 0.55}});
+
+  // 入场动画 — scale 0.92 → 1, opacity 0 → 1
+  const enterScale = interpolate(frame, [0, 40], [0.92, 1], {
+    ...clamp,
+    easing: EASE.inertial,
+  });
+  const enterOpacity = interpolate(frame, [0, 40], [0, 1], {
+    ...clamp,
+    easing: EASE.inertial,
+  });
+
+  // 下划线生长 — delay 25帧
+  const underlineScaleX = interpolate(frame, [25, 55], [0, 1], {
+    ...clamp,
+    easing: EASE.standard,
+  });
+
+  // 呼吸浮动
+  const breatheY = Math.sin(frame / 100) * 2;
 
   return (
-    <div style={{position: "relative", paddingBottom: 26}}>
+    <div
+      style={{
+        position: "relative",
+        paddingBottom: 28,
+        transform: `translateY(${breatheY}px)`,
+      }}
+    >
       <div
         style={{
-          position: "relative",
-          zIndex: 2,
-          fontSize: 94,
-          lineHeight: 1.08,
-          fontWeight: 950,
+          fontSize: 88,
+          fontWeight: 900,
           letterSpacing: -4,
-          opacity: Math.max(0, Math.min(1, enter)),
-          transform: `translateX(${(1 - enter) * -72}px) rotate(${(1 - enter) * -1.2}deg)`,
-          clipPath: `inset(0 ${100 - reveal}% 0 0)`,
+          lineHeight: 1.05,
+          color: COLORS.textPrimary,
+          textShadow: `0 0 40px ${accent}40`,
+          opacity: enterOpacity,
+          transform: `scale(${enterScale})`,
+          transformOrigin: "left center",
         }}
       >
         {text}
       </div>
+      {/* 下划线 — 带辉光 */}
       <div
         style={{
           position: "absolute",
-          left: -10,
-          bottom: 10,
-          width: "74%",
-          height: 22,
+          left: 0,
+          bottom: 0,
+          width: "55%",
+          height: 5,
+          borderRadius: 3,
           backgroundColor: accent,
-          opacity: 0.24,
+          boxShadow: `0 0 16px ${accent}60`,
           transformOrigin: "left center",
-          transform: `scaleX(${marker}) skewX(-8deg)`,
-          zIndex: 1,
+          transform: `scaleX(${underlineScaleX})`,
         }}
       />
-      <div style={{position: "absolute", right: 18, top: -12, width: 120, height: 120, zIndex: 3}}>
-        {BURST_ANGLES.map((angle, index) => (
-          <div
-            key={angle}
-            style={{
-              position: "absolute",
-              left: 58,
-              top: 58,
-              width: 5,
-              height: 34 + (index % 3) * 9,
-              borderRadius: 999,
-              backgroundColor: index % 2 === 0 ? accent : COLORS.ink,
-              transformOrigin: "center bottom",
-              transform: `rotate(${angle}deg) translateY(-42px) scaleY(${Math.max(0, burst)})`,
-              opacity: Math.max(0, Math.min(1, burst)),
-            }}
-          />
-        ))}
-      </div>
     </div>
   );
 };
