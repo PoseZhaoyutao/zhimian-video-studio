@@ -28,7 +28,7 @@
 
 ## HTML 知识分享
 
-除了竖屏视频，本仓库还沉淀了**可直接浏览器打开的交互式 HTML 知识分享网页**，配合动态动画讲解 AI 技术概念，适合回看、自学和投屏讲解。每期网页均为自包含单文件或已构建的前端工程，无需额外依赖。
+除了竖屏视频，本仓库还沉淀了**可直接浏览器打开的交互式 HTML 知识分享网页**，配合动态动画讲解 AI 技术概念，适合回看、自学和投屏讲解。每期网页均为自包含单文件或已构建的前端工程，无需额外依赖。所有网页源码开源在本仓库的 `knowledge-sharing/` 目录下，供大家学习。
 
 所有网页源码位于 [`knowledge-sharing/`](knowledge-sharing/) 目录，按日期排列：
 
@@ -38,7 +38,7 @@
 | 2026-07-25 | 知识宇宙 | [`knowledge-sharing/2026-07-25-knowledge-universe/index.html`](knowledge-sharing/2026-07-25-knowledge-universe/index.html) | 知识管理体系与工具链 |
 | 2026-07-28 | MoE 路由机制 | [`knowledge-sharing/2026-07-28-moe-router/index.html`](knowledge-sharing/2026-07-28-moe-router/index.html) | 混合专家模型路由可视化（React 构建） |
 | 2026-07-29 | TRAE 小白教程 | [`knowledge-sharing/2026-07-29-trae-tutorial/index.html`](knowledge-sharing/2026-07-29-trae-tutorial/index.html) | 从零搭建 AI 视频生产线全流程教程 |
-| 2026-07-31 | RAG 全流程拆解 | [`knowledge-sharing/2026-07-31-rag-pipeline/index.html`](knowledge-sharing/2026-07-31-rag-pipeline/index.html) | 从文档切分到大模型回答的完整 RAG 流程，含幻觉诊断与向量化动画 |
+| 2026-07-31 | RAG 全流程拆解 | [`knowledge-sharing/2026-07-31-rag-pipeline/index.html`](knowledge-sharing/2026-07-31-rag-pipeline/index.html) | 12 页分页式幻灯片，从幻觉诊断到六步流程，含向量化 4 步动画与重排序演示，配合 VoxCPM2 统一男声配音实现音画同步 |
 
 **使用方式**：
 
@@ -50,7 +50,7 @@ cd zhimian-video-studio/knowledge-sharing
 start 2026-07-31-rag-pipeline/index.html
 ```
 
-> 每期网页进入视口后动画自动播放，适合录屏配音后发布为视频。网页底部和开头结尾均标注"关注 Tao 同学"及本仓库地址。
+> 每期网页均为 1920×1080 固定画布，分页式设计无需滚动，动画自动播放，适合录屏配音后发布为视频。网页开头和结尾均标注"关注 Tao 同学"及本仓库的 `knowledge-sharing/` 目录地址，方便观众查阅源码。
 
 ## 30 秒快速开始
 
