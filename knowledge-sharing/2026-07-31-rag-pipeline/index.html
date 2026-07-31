@@ -53,7 +53,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Se
 /* ============ 开场页 / 结尾页 ============ */
 .fullscreen-slide .slide-content{padding:0;align-items:center;justify-content:center;text-align:center}
 .fullscreen-canvas{position:absolute;inset:0;width:1920px;height:1080px;z-index:0}
-.fullscreen-content{position:relative;z-index:2;text-align:center}
+.fullscreen-content{position:absolute;left:0;right:0;top:50%;transform:translateY(-60%);z-index:2;text-align:center}
 .intro-title,.outro-title{
   font-size:6rem;font-weight:900;
   background:linear-gradient(135deg,#00d4ff 0%,#a855f7 50%,#00ff88 100%);
@@ -74,7 +74,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Se
 }
 .intro-subtitle.show,.outro-subtitle.show{opacity:1;transform:translateY(0)}
 .intro-footer,.outro-footer{
-  position:absolute;bottom:80px;left:0;right:0;text-align:center;z-index:3;
+  position:absolute;left:0;right:0;bottom:220px;text-align:center;z-index:3;
   opacity:0;transform:translateY(30px);
   transition:all .6s ease .6s;
 }
