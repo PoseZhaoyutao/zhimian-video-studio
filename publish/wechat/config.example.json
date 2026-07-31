@@ -1,0 +1,6 @@
+{
+  "appid": "",
+  "secret": "",
+  "default_author": "智面引擎",
+  "ip_whitelist_note": "请在微信公众号后台 -> 开发 -> 基本配置 -> IP白名单中添加你的公网IP"
+}

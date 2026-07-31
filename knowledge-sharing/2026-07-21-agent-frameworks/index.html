@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920,height=1080">
+<title>Agent框架深度对比</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0a0a1a;
+  --bg2: #11112a;
+  --accent-blue: #6366f1;
+  --accent-purple: #a855f7;
+  --accent-cyan: #22d3ee;
+  --accent-pink: #ec4899;
+  --accent-green: #10b981;
+  --accent-orange: #f59e0b;
+  --text: #e2e8f0;
+  --text-dim: #94a3b8;
+  --text-bright: #ffffff;
+  --card-bg: rgba(20, 20, 50, 0.65);
+  --border: rgba(99, 102, 241, 0.3);
+  --glow: 0 0 30px rgba(99, 102, 241, 0.3);
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+body {
+  width: 1920px;
+  height: 1080px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  overflow: hidden;
+  position: relative;
+}
+
+/* 背景粒子层 */
+#particles {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 0;
+}
+
+/* 背景光晕 */
+.bg-glow {
+  position: fixed; border-radius: 50%; filter: blur(80px);
+  opacity: 0.15; pointer-events: none; z-index: 0;
+}
+.bg-glow-1 { top: -100px; left: -100px; width: 600px; height: 600px; background: var(--accent-blue); }
+.bg-glow-2 { bottom: -150px; right: -100px; width: 500px; height: 500px; background: var(--accent-purple); }
+.bg-glow-3 { top: 40%; left: 50%; width: 400px; height: 400px; background: var(--accent-cyan); opacity: 0.08; }
+
+/* 场景容器 */
+.scene {
+  position: absolute; top: 0; left: 0; width: 1920px; height: 1080px;
+  display: none; z-index: 1;
+  padding: 60px 80px;
+}
+.scene.active { display: flex; flex-direction: column; justify-content: center; align-items: center; }
+
+/* 动画基础类 */
+.fade-up { opacity: 0; transform: translateY(40px); transition: opacity 1s var(--ease), transform 1s var(--ease); }
+.fade-up.show { opacity: 1; transform: translateY(0); }
+
+.fade-in { opacity: 0; transition: opacity 1.2s var(--ease); }
+.fade-in.show { opacity: 1; }
+
+.slide-left { opacity: 0; transform: translateX(-60px); transition: opacity 0.9s var(--ease), transform 0.9s var(--ease); }
+.slide-left.show { opacity: 1; transform: translateX(0); }
+
+.slide-right { opacity: 0; transform: translateX(60px); transition: opacity 0.9s var(--ease), transform 0.9s var(--ease); }
+.slide-right.show { opacity: 1; transform: translateX(0); }
+
+.scale-in { opacity: 0; transform: scale(0.85); transition: opacity 0.8s var(--ease), transform 0.8s var(--ease); }
+.scale-in.show { opacity: 1; transform: scale(1); }
+
+/* 玻璃卡片 */
+.glass-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* 引用框 */
+.citation {
+  font-size: 16px; color: var(--text-dim);
+  border-left: 3px solid var(--accent-blue);
+  padding: 10px 20px; margin-top: 20px;
+  background: rgba(99, 102, 241, 0.05);
+  border-radius: 0 8px 8px 0;
+}
+
+/* 场景标题 */
+.scene-title {
+  font-size: 52px; font-weight: 700; color: var(--text-bright);
+  margin-bottom: 12px; letter-spacing: 2px;
+}
+.scene-subtitle {
+  font-size: 24px; color: var(--text-dim); margin-bottom: 40px;
+}
+
+/* ========== 场景1: Hook ========== */
+#s1 .hook-main {
+  text-align: center; position: relative;
+}
+#s1 .hook-label {
+  font-size: 20px; color: var(--accent-cyan); letter-spacing: 6px;
+  text-transform: uppercase; margin-bottom: 20px;
+}
+#s1 .hook-title {
+  font-size: 72px; font-weight: 800;
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple), var(--accent-cyan));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text; margin-bottom: 30px; line-height: 1.2;
+}
+#s1 .hook-question {
+  font-size: 28px; color: var(--text); margin-bottom: 50px;
+}
+#s1 .framework-names {
+  display: flex; gap: 30px; justify-content: center;
+}
+#s1 .fw-name {
+  font-size: 24px; font-weight: 600; padding: 16px 36px;
+  border-radius: 12px; border: 1px solid var(--border);
+  background: var(--card-bg);
+}
+#s1 .fw-name:nth-child(1) { border-color: var(--accent-blue); color: var(--accent-blue); }
+#s1 .fw-name:nth-child(2) { border-color: var(--accent-purple); color: var(--accent-purple); }
+#s1 .fw-name:nth-child(3) { border-color: var(--accent-green); color: var(--accent-green); }
+#s1 .fw-name:nth-child(4) { border-color: var(--accent-orange); color: var(--accent-orange); }
+
+/* ========== 场景2: 概览 ========== */
+#s2 .overview-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px;
+  width: 100%; max-width: 1600px;
+}
+#s2 .fw-card {
+  padding: 30px 24px; text-align: center; position: relative; overflow: hidden;
+  transition: transform 0.6s var(--ease);
+}
+#s2 .fw-card::before {
+  content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 3px;
+}
+#s2 .fw-card:nth-child(1)::before { background: var(--accent-blue); }
+#s2 .fw-card:nth-child(2)::before { background: var(--accent-purple); }
+#s2 .fw-card:nth-child(3)::before { background: var(--accent-green); }
+#s2 .fw-card:nth-child(4)::before { background: var(--accent-orange); }
+#s2 .fw-icon { font-size: 48px; margin-bottom: 16px; }
+#s2 .fw-title { font-size: 28px; font-weight: 700; color: var(--text-bright); margin-bottom: 8px; }
+#s2 .fw-stars { font-size: 20px; margin-bottom: 12px; }
+#s2 .fw-desc { font-size: 16px; color: var(--text-dim); line-height: 1.6; }
+#s2 .fw-arch { font-size: 18px; font-weight: 600; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+#s2 .fw-card:nth-child(1) .fw-arch { color: var(--accent-blue); }
+#s2 .fw-card:nth-child(2) .fw-arch { color: var(--accent-purple); }
+#s2 .fw-card:nth-child(3) .fw-arch { color: var(--accent-green); }
+#s2 .fw-card:nth-child(4) .fw-arch { color: var(--accent-orange); }
+
+/* ========== 场景3-6: 框架详解通用 ========== */
+.fw-detail { display: flex; gap: 60px; width: 100%; max-width: 1600px; align-items: center; }
+.fw-detail-left { flex: 1; }
+.fw-detail-right { flex: 1.2; }
+.fw-detail-name {
+  font-size: 48px; font-weight: 800; margin-bottom: 8px;
+}
+.fw-detail-meta { font-size: 18px; color: var(--text-dim); margin-bottom: 24px; }
+.fw-detail-features { list-style: none; }
+.fw-detail-features li {
+  font-size: 20px; color: var(--text); margin-bottom: 16px; padding-left: 28px;
+  position: relative; line-height: 1.5;
+}
+.fw-detail-features li::before {
+  content: ''; position: absolute; left: 0; top: 10px;
+  width: 12px; height: 12px; border-radius: 50%;
+}
+.fw-detail-features li:nth-child(1)::before { background: var(--accent-blue); box-shadow: 0 0 12px var(--accent-blue); }
+.fw-detail-features li:nth-child(2)::before { background: var(--accent-purple); box-shadow: 0 0 12px var(--accent-purple); }
+.fw-detail-features li:nth-child(3)::before { background: var(--accent-cyan); box-shadow: 0 0 12px var(--accent-cyan); }
+.fw-detail-features li:nth-child(4)::before { background: var(--accent-green); box-shadow: 0 0 12px var(--accent-green); }
+
+/* 架构图容器 */
+.arch-diagram {
+  width: 100%; height: 500px; position: relative;
+  display: flex; justify-content: center; align-items: center;
+}
+
+/* LangGraph 状态图节点 */
+.lg-node {
+  position: absolute; padding: 16px 28px; border-radius: 12px;
+  font-size: 18px; font-weight: 600; text-align: center;
+  border: 2px solid; background: rgba(20, 20, 50, 0.8);
+  transition: all 0.6s var(--ease);
+}
+.lg-node.start { top: 20px; left: 50%; transform: translateX(-50%); border-color: var(--accent-green); color: var(--accent-green); }
+.lg-node.proc1 { top: 180px; left: 15%; border-color: var(--accent-blue); color: var(--accent-blue); }
+.lg-node.proc2 { top: 180px; left: 50%; transform: translateX(-50%); border-color: var(--accent-purple); color: var(--accent-purple); }
+.lg-node.proc3 { top: 180px; right: 15%; border-color: var(--accent-cyan); color: var(--accent-cyan); }
+.lg-node.decide { top: 360px; left: 50%; transform: translateX(-50%); border-color: var(--accent-orange); color: var(--accent-orange); }
+.lg-node.end { top: 500px; left: 50%; transform: translateX(-50%); border-color: var(--accent-pink); color: var(--accent-pink); }
+
+/* SVG连线 */
+.arch-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+
+/* AutoGen 对话图 */
+.ag-agents { display: flex; justify-content: center; gap: 40px; }
+.ag-agent {
+  width: 160px; padding: 20px; border-radius: 16px; text-align: center;
+  border: 2px solid;
+}
+.ag-agent.manager { border-color: var(--accent-purple); position: relative; }
+.ag-agent.coder { border-color: var(--accent-blue); }
+.ag-agent.reviewer { border-color: var(--accent-green); }
+.ag-agent-name { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+.ag-agent-role { font-size: 14px; color: var(--text-dim); }
+.ag-bubble {
+  position: absolute; padding: 8px 16px; border-radius: 12px;
+  font-size: 14px; white-space: nowrap;
+  background: rgba(99, 102, 241, 0.15); border: 1px solid var(--border);
+}
+
+/* CrewAI 角色图 */
+.crew-hierarchy { display: flex; flex-direction: column; align-items: center; gap: 30px; }
+.crew-manager {
+  padding: 20px 40px; border-radius: 16px; border: 2px solid var(--accent-purple);
+  font-size: 22px; font-weight: 700; color: var(--accent-purple);
+  background: rgba(168, 85, 247, 0.1);
+}
+.crew-workers { display: flex; gap: 30px; }
+.crew-worker {
+  width: 140px; padding: 16px; border-radius: 12px; text-align: center;
+  border: 2px solid var(--border); background: var(--card-bg);
+}
+.crew-worker-name { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+.crew-worker-task { font-size: 13px; color: var(--text-dim); }
+
+/* OpenAI API 图 */
+.oai-stack { display: flex; flex-direction: column; gap: 16px; width: 400px; }
+.oai-layer {
+  padding: 20px 30px; border-radius: 12px; text-align: center;
+  border: 1px solid var(--border); background: var(--card-bg);
+  font-size: 20px; font-weight: 600;
+}
+.oai-layer.api { border-color: var(--accent-orange); color: var(--accent-orange); }
+.oai-layer.assistant { border-color: var(--accent-blue); color: var(--accent-blue); }
+.oai-layer.tools { border-color: var(--accent-purple); color: var(--accent-purple); }
+.oai-layer.model { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+
+/* ========== 场景7: 对比表 ========== */
+#s7 .compare-table {
+  width: 100%; max-width: 1600px; border-collapse: collapse;
+}
+#s7 .compare-table th {
+  padding: 20px 16px; font-size: 20px; font-weight: 700;
+  border-bottom: 2px solid var(--border);
+}
+#s7 .compare-table th:nth-child(1) { color: var(--text-dim); text-align: left; }
+#s7 .compare-table th:nth-child(2) { color: var(--accent-blue); }
+#s7 .compare-table th:nth-child(3) { color: var(--accent-purple); }
+#s7 .compare-table th:nth-child(4) { color: var(--accent-green); }
+#s7 .compare-table th:nth-child(5) { color: var(--accent-orange); }
+#s7 .compare-table td {
+  padding: 18px 16px; font-size: 18px; text-align: center;
+  border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+}
+#s7 .compare-table td:nth-child(1) { text-align: left; font-weight: 600; color: var(--text-bright); }
+#s7 .compare-table tr { transition: background 0.4s var(--ease); }
+
+/* ========== 场景8: 选型建议 ========== */
+#s8 .recommend-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px;
+  width: 100%; max-width: 1400px;
+}
+#s8 .recommend-card {
+  padding: 30px; position: relative; overflow: hidden;
+}
+#s8 .recommend-card::before {
+  content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%;
+}
+#s8 .recommend-card:nth-child(1)::before { background: var(--accent-blue); }
+#s8 .recommend-card:nth-child(2)::before { background: var(--accent-purple); }
+#s8 .recommend-card:nth-child(3)::before { background: var(--accent-green); }
+#s8 .recommend-card:nth-child(4)::before { background: var(--accent-orange); }
+#s8 .rec-fw { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
+#s8 .rec-card:nth-child(1) .rec-fw { color: var(--accent-blue); }
+#s8 .recommend-card:nth-child(1) .rec-fw { color: var(--accent-blue); }
+#s8 .recommend-card:nth-child(2) .rec-fw { color: var(--accent-purple); }
+#s8 .recommend-card:nth-child(3) .rec-fw { color: var(--accent-green); }
+#s8 .recommend-card:nth-child(4) .rec-fw { color: var(--accent-orange); }
+#s8 .rec-scene { font-size: 16px; color: var(--text-dim); margin-bottom: 12px; }
+#s8 .rec-desc { font-size: 18px; color: var(--text); line-height: 1.5; }
+#s8 .closing {
+  margin-top: 40px; text-align: center;
+  font-size: 24px; font-weight: 600; color: var(--accent-cyan);
+}
+#s8 .closing-sub {
+  margin-top: 12px; font-size: 18px; color: var(--text-dim);
+}
+
+/* 呼吸动画 */
+@keyframes breathe {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.breathe { animation: breathe 4s ease-in-out infinite; }
+
+/* 脉冲发光 */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.2); }
+  50% { box-shadow: 0 0 40px rgba(99, 102, 241, 0.4); }
+}
+.pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
+
+/* 粒子动画 */
+@keyframes float-particle {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  10% { opacity: 0.6; }
+  90% { opacity: 0.6; }
+  100% { transform: translateY(-100vh) translateX(50px); opacity: 0; }
+}
+</style>
+</head>
+<body>
+
+<!-- 背景层 -->
+<div class="bg-glow bg-glow-1"></div>
+<div class="bg-glow bg-glow-2"></div>
+<div class="bg-glow bg-glow-3"></div>
+<canvas id="particles"></canvas>
+
+<!-- ====== 场景1: Hook ====== -->
+<div class="scene" id="s1">
+  <div class="hook-main">
+    <div class="hook-label fade-up" data-delay="200">智面引擎 · AI算法面试精讲</div>
+    <div class="hook-title fade-up" data-delay="500">Agent框架深度对比</div>
+    <div class="hook-question fade-up" data-delay="900">LangGraph · AutoGen · CrewAI · OpenAI API<br>四大门派，怎么选？</div>
+    <div class="framework-names">
+      <div class="fw-name fade-up" data-delay="1200">LangGraph</div>
+      <div class="fw-name fade-up" data-delay="1400">AutoGen</div>
+      <div class="fw-name fade-up" data-delay="1600">CrewAI</div>
+      <div class="fw-name fade-up" data-delay="1800">OpenAI API</div>
+    </div>
+    <div class="citation fade-in" data-delay="2200" style="margin-top: 50px;">
+      数据来源: GitHub仓库 stars (2025.12); LangChain / Microsoft / CrewAI Inc. / OpenAI 官方文档
+    </div>
+  </div>
+</div>
+
+<!-- ====== 场景2: 四框架概览 ====== -->
+<div class="scene" id="s2">
+  <div class="scene-title fade-up">四大框架一览</div>
+  <div class="scene-subtitle fade-up" data-delay="200">四种设计哲学，四种架构路线</div>
+  <div class="overview-grid">
+    <div class="glass-card fw-card scale-in" data-delay="400">
+      <div class="fw-icon">🔵</div>
+      <div class="fw-title">LangGraph</div>
+      <div class="fw-stars" style="color: var(--accent-blue)">⭐ 10K+ Stars</div>
+      <div class="fw-desc">LangChain生态<br>状态图驱动<br>循环+条件路由</div>
+      <div class="fw-arch">图结构</div>
+    </div>
+    <div class="glass-card fw-card scale-in" data-delay="600">
+      <div class="fw-icon">🟣</div>
+      <div class="fw-title">AutoGen</div>
+      <div class="fw-stars" style="color: var(--accent-purple)">⭐ 54K+ Stars</div>
+      <div class="fw-desc">微软研究院<br>多Agent对话<br>代码执行沙箱</div>
+      <div class="fw-arch">对话群组</div>
+    </div>
+    <div class="glass-card fw-card scale-in" data-delay="800">
+      <div class="fw-icon">🟢</div>
+      <div class="fw-title">CrewAI</div>
+      <div class="fw-stars" style="color: var(--accent-green)">⭐ 25K+ Stars</div>
+      <div class="fw-desc">角色扮演编排<br>Crew + Task<br>顺序/层级模式</div>
+      <div class="fw-arch">角色团队</div>
+    </div>
+    <div class="glass-card fw-card scale-in" data-delay="1000">
+      <div class="fw-icon">🟠</div>
+      <div class="fw-title">OpenAI API</div>
+      <div class="fw-stars" style="color: var(--accent-orange)">⭐ Cloud Service</div>
+      <div class="fw-desc">云端托管<br>Code Interpreter<br>Retrieval + FC</div>
+      <div class="fw-arch">云服务API</div>
+    </div>
+  </div>
+  <div class="citation fade-in" data-delay="1400">
+    [1] github.com/langchain-ai/langgraph &nbsp; [2] github.com/microsoft/autogen &nbsp; [3] github.com/crewAIInc/crewAI &nbsp; [4] platform.openai.com/docs/assistants
+  </div>
+</div>
+
+<!-- ====== 场景3: LangGraph ====== -->
+<div class="scene" id="s3">
+  <div class="fw-detail">
+    <div class="fw-detail-left">
+      <div class="fw-detail-name fade-up" style="color: var(--accent-blue)">LangGraph</div>
+      <div class="fw-detail-meta fade-up" data-delay="200">LangChain · 状态图架构 · ⭐ 10K+</div>
+      <ul class="fw-detail-features">
+        <li class="slide-left" data-delay="400"><b>StateGraph</b>：有向图，节点=处理步骤，边=条件路由</li>
+        <li class="slide-left" data-delay="600"><b>循环图</b>：支持Cyclic Graph，Agent自主迭代的关键</li>
+        <li class="slide-left" data-delay="800"><b>状态持久化</b>：Checkpointer断点恢复</li>
+        <li class="slide-left" data-delay="1000"><b>人工介入</b>：Human-in-the-loop原生支持</li>
+      </ul>
+      <div class="citation fade-in" data-delay="1200">
+        来源: LangChain官方文档 langchain-ai.github.io/langgraph/<br>
+        设计目标: 可控、可调试的生产级Agent
+      </div>
+    </div>
+    <div class="fw-detail-right">
+      <div class="arch-diagram glass-card scale-in" data-delay="500" style="height: 580px; padding: 30px;">
+        <svg class="arch-svg" style="width: 100%; height: 100%;">
+          <defs>
+            <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L9,3 z" fill="#6366f1"/>
+            </marker>
+          </defs>
+          <path d="M 400,60 Q 200,120 180,180" stroke="#6366f1" stroke-width="2" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-blue)"/>
+          <path d="M 400,60 Q 400,120 400,180" stroke="#a855f7" stroke-width="2" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-blue)"/>
+          <path d="M 400,60 Q 600,120 620,180" stroke="#22d3ee" stroke-width="2" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-blue)"/>
+          <path d="M 180,240 Q 200,300 400,360" stroke="#f59e0b" stroke-width="2" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-blue)"/>
+          <path d="M 400,240 Q 400,300 400,360" stroke="#f59e0b" stroke-width="2" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-blue)"/>
+          <path d="M 620,240 Q 600,300 400,360" stroke="#f59e0b" stroke-width="2" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-blue)"/>
+          <path d="M 400,420 L 400,500" stroke="#ec4899" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+          <path d="M 400,360 Q 250,350 180,220" stroke="#6366f1" stroke-width="2" fill="none" stroke-dasharray="4,4" marker-end="url(#arrow-blue)" opacity="0.5"/>
+        </svg>
+        <div class="lg-node start breathe">START</div>
+        <div class="lg-node proc1">Retrieve</div>
+        <div class="lg-node proc2">Generate</div>
+        <div class="lg-node proc3">Tool Call</div>
+        <div class="lg-node decide pulse-glow">Condition</div>
+        <div class="lg-node end">END</div>
+        <div style="position: absolute; bottom: 10px; right: 20px; font-size: 14px; color: var(--text-dim);">
+          虚线 = 循环回路 (Cyclic Edge)
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 场景4: AutoGen ====== -->
+<div class="scene" id="s4">
+  <div class="fw-detail">
+    <div class="fw-detail-left">
+      <div class="fw-detail-name fade-up" style="color: var(--accent-purple)">AutoGen</div>
+      <div class="fw-detail-meta fade-up" data-delay="200">Microsoft Research · 对话驱动 · ⭐ 54K+</div>
+      <ul class="fw-detail-features">
+        <li class="slide-left" data-delay="400"><b>GroupChat</b>：多Agent群组对话，Manager调度发言</li>
+        <li class="slide-left" data-delay="600"><b>代码执行</b>：内置Docker沙箱，可写代码并运行</li>
+        <li class="slide-left" data-delay="800"><b>事件驱动</b>：v0.4重写，支持异步分布式</li>
+        <li class="slide-left" data-delay="1000"><b>MAF合并</b>：2025末与Semantic Kernel合并</li>
+      </ul>
+      <div class="citation fade-in" data-delay="1200">
+        来源: Microsoft Research官方博客; github.com/microsoft/autogen<br>
+        弱点: 对话流程不易精确控制，状态管理不如LangGraph显式
+      </div>
+    </div>
+    <div class="fw-detail-right">
+      <div class="arch-diagram glass-card scale-in" data-delay="500" style="height: 580px; padding: 40px; position: relative;">
+        <div style="position: relative; width: 100%; height: 100%;">
+          <!-- Manager Agent -->
+          <div class="ag-agent manager breathe" style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); width: 200px;">
+            <div class="ag-agent-name" style="color: var(--accent-purple)">Manager</div>
+            <div class="ag-agent-role">调度发言顺序</div>
+          </div>
+          <!-- Three workers -->
+          <div class="ag-agent coder" style="position: absolute; top: 200px; left: 30px;">
+            <div class="ag-agent-name" style="color: var(--accent-blue)">Coder</div>
+            <div class="ag-agent-role">编写代码</div>
+          </div>
+          <div class="ag-agent reviewer" style="position: absolute; top: 200px; left: 50%; transform: translateX(-50%);">
+            <div class="ag-agent-name" style="color: var(--accent-green)">Reviewer</div>
+            <div class="ag-agent-role">审查代码</div>
+          </div>
+          <div class="ag-agent" style="position: absolute; top: 200px; right: 30px; border-color: var(--accent-cyan);">
+            <div class="ag-agent-name" style="color: var(--accent-cyan)">Executor</div>
+            <div class="ag-agent-role">Docker执行</div>
+          </div>
+          <!-- 对话气泡 -->
+          <div class="ag-bubble fade-in" data-delay="800" style="top: 130px; left: 15%; color: var(--accent-blue)">"我来写排序算法"</div>
+          <div class="ag-bubble fade-in" data-delay="1000" style="top: 130px; right: 15%; color: var(--accent-green)">"复杂度O(n²)，可优化"</div>
+          <div class="ag-bubble fade-in" data-delay="1200" style="top: 340px; left: 40%; color: var(--accent-cyan)">"执行结果: [1,2,3...]"</div>
+          <!-- 连线 -->
+          <svg class="arch-svg" style="width: 100%; height: 100%;">
+            <path d="M 400,120 Q 200,150 150,200" stroke="#a855f7" stroke-width="2" fill="none" opacity="0.4"/>
+            <path d="M 400,120 Q 400,160 400,200" stroke="#a855f7" stroke-width="2" fill="none" opacity="0.4"/>
+            <path d="M 400,120 Q 600,150 650,200" stroke="#a855f7" stroke-width="2" fill="none" opacity="0.4"/>
+            <path d="M 150,260 Q 200,300 350,340" stroke="#6366f1" stroke-width="1.5" fill="none" opacity="0.3" stroke-dasharray="4,4"/>
+            <path d="M 650,260 Q 600,300 450,340" stroke="#22d3ee" stroke-width="1.5" fill="none" opacity="0.3" stroke-dasharray="4,4"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 场景5: CrewAI ====== -->
+<div class="scene" id="s5">
+  <div class="fw-detail">
+    <div class="fw-detail-left">
+      <div class="fw-detail-name fade-up" style="color: var(--accent-green)">CrewAI</div>
+      <div class="fw-detail-meta fade-up" data-delay="200">CrewAI Inc. · 角色编排 · ⭐ 25K+</div>
+      <ul class="fw-detail-features">
+        <li class="slide-left" data-delay="400"><b>角色定义</b>：Agent(role, goal, backstory)</li>
+        <li class="slide-left" data-delay="600"><b>两种编排</b>：顺序(Sequential) + 层级(Hierarchical)</li>
+        <li class="slide-left" data-delay="800"><b>任务分配</b>：Manager Agent负责任务分派</li>
+        <li class="slide-left" data-delay="1000"><b>平台进化</b>：2025年升级为Agentic AI平台</li>
+      </ul>
+      <div class="citation fade-in" data-delay="1200">
+        来源: CrewAI官方文档 docs.crewai.com; github.com/crewAIInc/crewAI<br>
+        优势: 上手快，直观 &nbsp; 劣势: 复杂流程控制力不如LangGraph
+      </div>
+    </div>
+    <div class="fw-detail-right">
+      <div class="arch-diagram glass-card scale-in" data-delay="500" style="height: 580px; padding: 40px; position: relative;">
+        <div class="crew-hierarchy" style="padding-top: 20px;">
+          <div class="crew-manager breathe">🎯 Manager Agent<br><span style="font-size: 14px; color: var(--text-dim)">分配任务 · 协调流程</span></div>
+          <svg width="300" height="40">
+            <path d="M 150,0 L 50,40" stroke="var(--accent-purple)" stroke-width="2" fill="none" opacity="0.4"/>
+            <path d="M 150,0 L 150,40" stroke="var(--accent-purple)" stroke-width="2" fill="none" opacity="0.4"/>
+            <path d="M 150,0 L 250,40" stroke="var(--accent-purple)" stroke-width="2" fill="none" opacity="0.4"/>
+          </svg>
+          <div class="crew-workers">
+            <div class="crew-worker scale-in" data-delay="700">
+              <div class="crew-worker-name" style="color: var(--accent-blue)">Researcher</div>
+              <div class="crew-worker-task">收集资料</div>
+            </div>
+            <div class="crew-worker scale-in" data-delay="900">
+              <div class="crew-worker-name" style="color: var(--accent-green)">Writer</div>
+              <div class="crew-worker-task">撰写内容</div>
+            </div>
+            <div class="crew-worker scale-in" data-delay="1100">
+              <div class="crew-worker-name" style="color: var(--accent-orange)">Reviewer</div>
+              <div class="crew-worker-task">审核校对</div>
+            </div>
+          </div>
+          <div class="fade-in" data-delay="1300" style="margin-top: 30px; padding: 16px 30px; border-radius: 12px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3);">
+            <div style="font-size: 16px; color: var(--accent-green); font-weight: 600;">流程模式</div>
+            <div style="font-size: 14px; color: var(--text-dim); margin-top: 6px;">Sequential: A → B → C &nbsp;|&nbsp; Hierarchical: Manager → Workers</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 场景6: OpenAI Assistants API ====== -->
+<div class="scene" id="s6">
+  <div class="fw-detail">
+    <div class="fw-detail-left">
+      <div class="fw-detail-name fade-up" style="color: var(--accent-orange)">OpenAI Assistants API</div>
+      <div class="fw-detail-meta fade-up" data-delay="200">OpenAI · 云端托管 · platform.openai.com</div>
+      <ul class="fw-detail-features">
+        <li class="slide-left" data-delay="400"><b>Code Interpreter</b>：内置Python代码执行</li>
+        <li class="slide-left" data-delay="600"><b>Retrieval</b>：文件检索+向量搜索</li>
+        <li class="slide-left" data-delay="800"><b>Function Calling</b>：调用自定义函数</li>
+        <li class="slide-left" data-delay="1000"><b>Responses API</b>：2025年升级版</li>
+      </ul>
+      <div class="citation fade-in" data-delay="1200">
+        来源: OpenAI官方平台文档 platform.openai.com/docs/assistants<br>
+        优势: 集成最简单 &nbsp; 劣势: 生态锁定、单Agent、不可控
+      </div>
+    </div>
+    <div class="fw-detail-right">
+      <div class="arch-diagram glass-card scale-in" data-delay="500" style="height: 580px; padding: 40px; justify-content: center;">
+        <div class="oai-stack">
+          <div class="oai-layer api fade-up" data-delay="600">⚡ Your App (API Call)</div>
+          <div style="text-align: center; color: var(--text-dim); font-size: 24px;">↓</div>
+          <div class="oai-layer assistant fade-up" data-delay="800">🤖 Assistant (云端托管)</div>
+          <div style="text-align: center; color: var(--text-dim); font-size: 24px;">↓</div>
+          <div class="oai-layer tools fade-up" data-delay="1000">🛠️ Tools Layer<br><span style="font-size: 14px; color: var(--text-dim)">Code Interpreter · Retrieval · FC</span></div>
+          <div style="text-align: center; color: var(--text-dim); font-size: 24px;">↓</div>
+          <div class="oai-layer model fade-up" data-delay="1200">🧠 GPT Model (黑盒)</div>
+        </div>
+        <div class="fade-in" data-delay="1400" style="position: absolute; bottom: 30px; right: 30px; font-size: 14px; color: var(--accent-pink);">
+          ⚠ 无法切换模型 · 无法多Agent协作
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 场景7: 四维对比 ====== -->
+<div class="scene" id="s7">
+  <div class="scene-title fade-up">四维深度对比</div>
+  <div class="scene-subtitle fade-up" data-delay="200">架构 · 状态 · 多Agent · 生产就绪</div>
+  <table class="compare-table glass-card" style="padding: 20px;">
+    <thead>
+      <tr>
+        <th class="fade-up" data-delay="400">对比维度</th>
+        <th class="fade-up" data-delay="500">LangGraph</th>
+        <th class="fade-up" data-delay="600">AutoGen</th>
+        <th class="fade-up" data-delay="700">CrewAI</th>
+        <th class="fade-up" data-delay="800">OpenAI API</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="fade-up" data-delay="900">
+        <td>架构模型</td>
+        <td>状态图 (StateGraph)</td>
+        <td>对话群组 (GroupChat)</td>
+        <td>角色团队 (Crew)</td>
+        <td>云服务 (API)</td>
+      </tr>
+      <tr class="fade-up" data-delay="1000">
+        <td>状态管理</td>
+        <td style="color: var(--accent-blue)">⭐ 最显式 (State对象)</td>
+        <td>隐式 (对话历史)</td>
+        <td>半显式 (Task输出)</td>
+        <td style="color: var(--accent-pink)">黑盒</td>
+      </tr>
+      <tr class="fade-up" data-delay="1100">
+        <td>多Agent支持</td>
+        <td>通用支持</td>
+        <td style="color: var(--accent-purple)">⭐ 最强 (原生GroupChat)</td>
+        <td>Crew编排</td>
+        <td style="color: var(--accent-pink)">❌ 不支持</td>
+      </tr>
+      <tr class="fade-up" data-delay="1200">
+        <td>生产就绪度</td>
+        <td style="color: var(--accent-blue)">⭐ Checkpoint+LangSmith</td>
+        <td>迁移中 (→MAF)</td>
+        <td>企业版</td>
+        <td style="color: var(--accent-orange)">⭐ 云服务天然就绪</td>
+      </tr>
+      <tr class="fade-up" data-delay="1300">
+        <td>循环/迭代</td>
+        <td style="color: var(--accent-blue)">⭐ 原生循环图</td>
+        <td>对话轮次</td>
+        <td>有限</td>
+        <td style="color: var(--accent-pink)">❌</td>
+      </tr>
+      <tr class="fade-up" data-delay="1400">
+        <td>模型自由度</td>
+        <td style="color: var(--accent-blue)">⭐ 任意模型</td>
+        <td style="color: var(--accent-purple)">⭐ 任意模型</td>
+        <td style="color: var(--accent-green)">⭐ 任意模型</td>
+        <td style="color: var(--accent-pink)">仅OpenAI</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ====== 场景8: 选型建议 ====== -->
+<div class="scene" id="s8">
+  <div class="scene-title fade-up">选型建议</div>
+  <div class="scene-subtitle fade-up" data-delay="200">没有最好，只有最适合</div>
+  <div class="recommend-grid">
+    <div class="glass-card recommend-card fade-up" data-delay="400">
+      <div class="rec-fw">LangGraph</div>
+      <div class="rec-scene">复杂流程控制 · 循环迭代 · 精确状态管理</div>
+      <div class="rec-desc">需要条件分支、断点恢复、人工介入的生产级Agent。配合LangSmith可观测性，适合严肃工程。</div>
+    </div>
+    <div class="glass-card recommend-card fade-up" data-delay="600">
+      <div class="rec-fw">AutoGen / MAF</div>
+      <div class="rec-scene">多Agent协作对话 · 代码生成与执行</div>
+      <div class="rec-desc">核心场景是多Agent讨论、代码编写和运行。微软生态用户首选，MAF统一了Agent开发栈。</div>
+    </div>
+    <div class="glass-card recommend-card fade-up" data-delay="800">
+      <div class="rec-fw">CrewAI</div>
+      <div class="rec-scene">角色分工 · 快速原型 · 直觉式开发</div>
+      <div class="rec-desc">团队偏好角色扮演式的任务分配，需要快速搭建多Agent协作流水线，不需要复杂流程控制。</div>
+    </div>
+    <div class="glass-card recommend-card fade-up" data-delay="1000">
+      <div class="rec-fw">OpenAI API</div>
+      <div class="rec-scene">简单集成 · 不在意生态锁定</div>
+      <div class="rec-desc">只需几行代码接入AI能力，不需要多Agent、不需要自定义流程，接受OpenAI生态绑定。</div>
+    </div>
+  </div>
+  <div class="closing fade-up" data-delay="1300">四种设计哲学：图 · 对话 · 角色 · 云服务</div>
+  <div class="closing-sub fade-up" data-delay="1500">关注智面引擎：AgentMaker</div>
+</div>
+
+<script>
+// ====== 粒子背景 ======
+const canvas = document.getElementById('particles');
+const ctx = canvas.getContext('2d');
+canvas.width = 1920;
+canvas.height = 1080;
+
+const particles = [];
+for (let i = 0; i < 60; i++) {
+  particles.push({
+    x: Math.random() * 1920,
+    y: Math.random() * 1080,
+    r: Math.random() * 2 + 0.5,
+    vx: (Math.random() - 0.5) * 0.3,
+    vy: (Math.random() - 0.5) * 0.3,
+    opacity: Math.random() * 0.4 + 0.1,
+    color: ['#6366f1', '#a855f7', '#22d3ee'][Math.floor(Math.random() * 3)]
+  });
+}
+
+function animateParticles() {
+  ctx.clearRect(0, 0, 1920, 1080);
+  particles.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    if (p.x < 0) p.x = 1920;
+    if (p.x > 1920) p.x = 0;
+    if (p.y < 0) p.y = 1080;
+    if (p.y > 1080) p.y = 0;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = p.opacity;
+    ctx.fill();
+  });
+  requestAnimationFrame(animateParticles);
+}
+animateParticles();
+
+// ====== 场景控制 ======
+function showScene(index) {
+  document.querySelectorAll('.scene').forEach(s => s.classList.remove('active'));
+  const scene = document.getElementById('s' + (index + 1));
+  if (!scene) return;
+
+  // 重置动画
+  scene.querySelectorAll('.fade-up, .fade-in, .slide-left, .slide-right, .scale-in').forEach(el => {
+    el.classList.remove('show');
+  });
+
+  scene.classList.add('active');
+
+  // 延迟触发动画
+  scene.querySelectorAll('[data-delay]').forEach(el => {
+    const delay = parseInt(el.dataset.delay);
+    setTimeout(() => el.classList.add('show'), delay);
+  });
+
+  // 无delay的元素立即显示
+  scene.querySelectorAll('.fade-up:not([data-delay]), .fade-in:not([data-delay]), .slide-left:not([data-delay]), .scale-in:not([data-delay])').forEach(el => {
+    setTimeout(() => el.classList.add('show'), 100);
+  });
+}
+
+// 暴露给Playwright
+window.showScene = showScene;
+window.sceneCount = 8;
+
+// 默认显示场景1
+window.showScene(0);
+</script>
+</body>
+</html>

@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>知识宇宙 | Knowledge Universe</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800&family=SF+Pro+Display:wght@300;400;500;600;700&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --g-bg: rgba(255,255,255,0.035);
+            --g-bg-hi: rgba(255,255,255,0.07);
+            --g-bg-active: rgba(255,255,255,0.1);
+            --g-border: rgba(255,255,255,0.08);
+            --g-border-hi: rgba(255,255,255,0.18);
+            --g-shine: rgba(255,255,255,0.12);
+            --g-inner: rgba(0,0,0,0.15);
+            --blur: 32px;
+            --blur-strong: 48px;
+            --a1: #60A5FA;
+            --a2: #A78BFA;
+            --a3: #22D3EE;
+            --a4: #F472B6;
+            --a5: #34D399;
+            --a6: #FBBF24;
+            --t1: rgba(255,255,255,0.95);
+            --t2: rgba(255,255,255,0.6);
+            --t3: rgba(255,255,255,0.25);
+            --ease-vision: cubic-bezier(0.22, 1, 0.36, 1);
+            --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+            --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        html, body {
+            width: 100%; height: 100%;
+            overflow: hidden;
+            font-family: -apple-system, 'SF Pro Display', 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #000;
+            color: var(--t1);
+            user-select: none;
+            -webkit-font-smoothing: antialiased;
+            cursor: default;
+        }
+
+        #bg-layer {
+            position: fixed; inset: 0; z-index: 0;
+            background: radial-gradient(ellipse 120% 100% at 50% 50%,
+                #0a0a1a 0%,
+                #050510 40%,
+                #010108 80%,
+                #000 100%);
+        }
+
+        canvas { display: block; position: fixed; top: 0; left: 0; }
+        #c-stars { z-index: 1; pointer-events: none; }
+        #c-nebula { z-index: 2; pointer-events: none; }
+        #c-particles { z-index: 3; pointer-events: none; }
+        #c-lines { z-index: 4; pointer-events: none; }
+
+        #cursor-glow {
+            position: fixed; z-index: 5;
+            width: 500px; height: 500px;
+            border-radius: 50%;
+            pointer-events: none;
+            background: radial-gradient(circle at center,
+                rgba(96,165,250,0.06) 0%,
+                rgba(167,139,250,0.03) 35%,
+                transparent 70%);
+            transform: translate(-50%,-50%);
+            mix-blend-mode: screen;
+            transition: opacity 0.6s var(--ease-vision);
+        }
+
+        #scene {
+            position: fixed; inset: 0; z-index: 10;
+            transform-style: preserve-3d;
+            perspective: 2000px;
+            perspective-origin: 50% 50%;
+        }
+
+        #world {
+            position: absolute; inset: 0;
+            transform-style: preserve-3d;
+        }
+
+        .k-node {
+            position: absolute;
+            transform-style: preserve-3d;
+            cursor: pointer;
+            will-change: transform;
+        }
+
+        .k-core {
+            width: 220px; height: 220px;
+            border-radius: 50%;
+            position: relative;
+            transform: translate(-50%,-50%);
+            background: radial-gradient(circle at 35% 30%,
+                rgba(255,255,255,0.18) 0%,
+                rgba(255,255,255,0.06) 30%,
+                rgba(var(--nc,96,165,250),0.04) 60%,
+                rgba(var(--nc,96,165,250),0.08) 100%);
+            backdrop-filter: blur(var(--blur-strong)) saturate(220%);
+            -webkit-backdrop-filter: blur(var(--blur-strong)) saturate(220%);
+            border: 1px solid rgba(255,255,255,0.15);
+            box-shadow:
+                0 0 80px rgba(var(--nc,96,165,250),0.15),
+                0 0 160px rgba(var(--nc,96,165,250),0.08),
+                inset 0 2px 2px rgba(255,255,255,0.2),
+                inset 0 -2px 2px rgba(0,0,0,0.2),
+                inset 0 0 60px rgba(var(--nc,96,165,250),0.03);
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column;
+            transition: box-shadow 0.6s var(--ease-vision),
+                        border-color 0.6s var(--ease-vision);
+        }
+
+        .k-core::before {
+            content: ''; position: absolute; inset: -3px;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg,
+                transparent 0deg,
+                rgba(var(--nc,96,165,250),0.3) 60deg,
+                transparent 120deg,
+                rgba(167,139,250,0.2) 200deg,
+                transparent 280deg,
+                rgba(34,211,238,0.25) 340deg,
+                transparent 360deg);
+            z-index: -1;
+            animation: rotate-slow 12s linear infinite;
+            opacity: 0.6;
+        }
+
+        .k-core::after {
+            content: ''; position: absolute; inset: -20px;
+            border-radius: 50%;
+            background: radial-gradient(circle,
+                rgba(var(--nc,96,165,250),0.08) 0%,
+                rgba(var(--nc,96,165,250),0.04) 40%,
+                transparent 70%);
+            z-index: -2;
+            animation: pulse-core 4s ease-in-out infinite;
+        }
+
+        @keyframes rotate-slow { to { transform: rotate(360deg); } }
+        @keyframes pulse-core {
+            0%, 100% { opacity: 0.5; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.08); }
+        }
+
+        .k-l1 {
+            width: 140px; height: 140px;
+            border-radius: 50%;
+            position: relative;
+            transform: translate(-50%,-50%);
+            background: radial-gradient(circle at 35% 28%,
+                rgba(255,255,255,0.14) 0%,
+                rgba(255,255,255,0.04) 40%,
+                rgba(var(--nc,96,165,250),0.03) 100%);
+            backdrop-filter: blur(var(--blur)) saturate(180%);
+            -webkit-backdrop-filter: blur(var(--blur)) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow:
+                0 4px 40px rgba(0,0,0,0.4),
+                0 0 50px rgba(var(--nc,96,165,250),0.08),
+                inset 0 1px 1px rgba(255,255,255,0.15),
+                inset 0 -1px 1px rgba(0,0,0,0.1);
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column;
+            transition: box-shadow 0.4s var(--ease-vision),
+                        border-color 0.4s var(--ease-vision);
+        }
+
+        .k-l2 {
+            width: 100px; height: 100px;
+            border-radius: 50%;
+            position: relative;
+            transform: translate(-50%,-50%);
+            background: radial-gradient(circle at 35% 28%,
+                rgba(255,255,255,0.1) 0%,
+                rgba(255,255,255,0.03) 50%,
+                rgba(var(--nc,96,165,250),0.02) 100%);
+            backdrop-filter: blur(24px) saturate(150%);
+            -webkit-backdrop-filter: blur(24px) saturate(150%);
+            border: 1px solid rgba(255,255,255,0.07);
+            box-shadow:
+                0 2px 24px rgba(0,0,0,0.3),
+                0 0 30px rgba(var(--nc,96,165,250),0.06),
+                inset 0 1px 1px rgba(255,255,255,0.1);
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column;
+            transition: box-shadow 0.3s var(--ease-vision),
+                        border-color 0.3s var(--ease-vision);
+        }
+
+        .k-l3 {
+            width: 72px; height: 72px;
+            border-radius: 50%;
+            position: relative;
+            transform: translate(-50%,-50%);
+            background: radial-gradient(circle at 35% 30%,
+                rgba(255,255,255,0.08) 0%,
+                rgba(255,255,255,0.02) 60%,
+                rgba(var(--nc,96,165,250),0.02) 100%);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.06);
+            box-shadow:
+                0 2px 16px rgba(0,0,0,0.25),
+                0 0 20px rgba(var(--nc,96,165,250),0.04),
+                inset 0 1px 1px rgba(255,255,255,0.08);
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column;
+            transition: box-shadow 0.3s var(--ease-vision);
+        }
+
+        .k-node:hover .k-l1,
+        .k-node:hover .k-l2,
+        .k-node:hover .k-l3 {
+            border-color: var(--g-border-hi);
+            box-shadow:
+                0 8px 60px rgba(0,0,0,0.5),
+                0 0 80px rgba(var(--nc,96,165,250),0.15),
+                inset 0 1px 1px rgba(255,255,255,0.2),
+                inset 0 -1px 1px rgba(0,0,0,0.1);
+        }
+
+        .k-node:hover .k-core {
+            box-shadow:
+                0 0 100px rgba(var(--nc,96,165,250),0.28),
+                0 0 200px rgba(var(--nc,96,165,250),0.14),
+                inset 0 2px 2px rgba(255,255,255,0.25),
+                inset 0 -2px 2px rgba(0,0,0,0.2),
+                inset 0 0 80px rgba(var(--nc,96,165,250),0.06);
+            border-color: rgba(255,255,255,0.22);
+        }
+
+        .k-label {
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            background: linear-gradient(135deg, #fff 0%, #e0e8ff 50%, #c4b5fd 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-align: center;
+            line-height: 1.2;
+        }
+
+        .k-l1 .k-label { font-size: 16px; font-weight: 500; }
+        .k-l2 .k-label { font-size: 12px; font-weight: 500; }
+        .k-l3 .k-label { font-size: 10px; font-weight: 400; letter-spacing: 0.03em; }
+
+        .k-sub {
+            font-size: 10px;
+            color: var(--t2);
+            margin-top: 4px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-weight: 300;
+        }
+
+        .k-l1 .k-sub { font-size: 9px; }
+        .k-l2 .k-sub { display: none; }
+        .k-l3 .k-sub { display: none; }
+
+        .k-ring {
+            position: absolute;
+            left: 50%; top: 50%;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.04);
+            transform: translate(-50%,-50%) rotateX(72deg);
+            pointer-events: none;
+        }
+
+        .k-ring-inner {
+            width: 280px; height: 280px;
+            animation: ring-rotate 20s linear infinite;
+        }
+        .k-ring-outer {
+            width: 340px; height: 340px;
+            border-color: rgba(255,255,255,0.025);
+            animation: ring-rotate 30s linear infinite reverse;
+        }
+
+        @keyframes ring-rotate { to { transform: translate(-50%,-50%) rotateX(72deg) rotateZ(360deg); } }
+
+        #detail-view {
+            position: fixed; inset: 0; z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.8s var(--ease-vision);
+        }
+
+        #detail-view.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .d-core {
+            position: absolute;
+            left: 50%; top: 50%;
+            width: 320px; height: 320px;
+            border-radius: 50%;
+            transform: translate(-50%,-50%) scale(0);
+            background: radial-gradient(circle at 35% 30%,
+                rgba(255,255,255,0.2) 0%,
+                rgba(255,255,255,0.06) 30%,
+                rgba(96,165,250,0.05) 60%,
+                rgba(167,139,250,0.08) 100%);
+            backdrop-filter: blur(var(--blur-strong)) saturate(240%);
+            -webkit-backdrop-filter: blur(var(--blur-strong)) saturate(240%);
+            border: 1.5px solid rgba(255,255,255,0.18);
+            box-shadow:
+                0 0 120px rgba(96,165,250,0.2),
+                0 0 240px rgba(167,139,250,0.1),
+                inset 0 2px 4px rgba(255,255,255,0.25),
+                inset 0 -2px 4px rgba(0,0,0,0.2),
+                inset 0 0 100px rgba(96,165,250,0.04);
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column;
+            z-index: 60;
+            transition: transform 1s var(--ease-bounce);
+        }
+
+        #detail-view.active .d-core {
+            transform: translate(-50%,-50%) scale(1);
+        }
+
+        .d-core::before {
+            content: ''; position: absolute; inset: -5px;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg,
+                transparent 0deg,
+                rgba(96,165,250,0.4) 80deg,
+                transparent 160deg,
+                rgba(167,139,250,0.3) 240deg,
+                transparent 320deg,
+                rgba(34,211,238,0.35) 360deg);
+            z-index: -1;
+            animation: rotate-slow 10s linear infinite;
+        }
+
+        .d-core::after {
+            content: ''; position: absolute; inset: -40px;
+            border-radius: 50%;
+            background: radial-gradient(circle,
+                rgba(96,165,250,0.1) 0%,
+                rgba(167,139,250,0.05) 40%,
+                transparent 70%);
+            z-index: -2;
+            animation: pulse-core 3s ease-in-out infinite;
+        }
+
+        .d-title {
+            font-size: 42px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #fff 0%, #bfdbfe 30%, #c4b5fd 70%, #67e8f9 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.01em;
+        }
+
+        .d-subtitle {
+            font-size: 13px;
+            color: var(--t2);
+            margin-top: 8px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            font-weight: 300;
+        }
+
+        .d-desc {
+            font-size: 13px;
+            color: var(--t2);
+            text-align: center;
+            margin-top: 16px;
+            max-width: 200px;
+            line-height: 1.6;
+            font-weight: 300;
+        }
+
+        .d-panel {
+            position: absolute;
+            background: linear-gradient(145deg,
+                rgba(255,255,255,0.06) 0%,
+                rgba(255,255,255,0.02) 100%);
+            backdrop-filter: blur(var(--blur)) saturate(180%);
+            -webkit-backdrop-filter: blur(var(--blur)) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 28px;
+            padding: 28px;
+            box-shadow:
+                0 8px 40px rgba(0,0,0,0.4),
+                inset 0 1px 0 rgba(255,255,255,0.1);
+            transform: scale(0);
+            opacity: 0;
+            transition: transform 0.7s var(--ease-bounce),
+                        opacity 0.5s var(--ease-vision),
+                        border-color 0.3s ease,
+                        box-shadow 0.3s ease;
+            will-change: transform, opacity;
+            max-width: 320px;
+        }
+
+        #detail-view.active .d-panel {
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .d-panel:hover {
+            border-color: rgba(255,255,255,0.15);
+            box-shadow:
+                0 12px 60px rgba(0,0,0,0.5),
+                0 0 40px rgba(96,165,250,0.06),
+                inset 0 1px 0 rgba(255,255,255,0.15);
+        }
+
+        .d-panel-icon {
+            font-size: 28px;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .d-panel-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--t1);
+            margin-bottom: 10px;
+            letter-spacing: 0.01em;
+        }
+
+        .d-panel-text {
+            font-size: 13px;
+            line-height: 1.7;
+            color: var(--t2);
+            font-weight: 300;
+        }
+
+        .d-tags {
+            display: flex; flex-wrap: wrap; gap: 6px;
+            margin-top: 4px;
+        }
+
+        .d-tag {
+            padding: 4px 12px;
+            border-radius: 100px;
+            font-size: 11px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.08);
+            color: var(--t2);
+            font-weight: 400;
+        }
+
+        .d-back {
+            position: fixed;
+            top: 32px; left: 32px;
+            z-index: 100;
+            display: flex; align-items: center; gap: 10px;
+            padding: 12px 24px;
+            border-radius: 100px;
+            background: linear-gradient(145deg,
+                rgba(255,255,255,0.06) 0%,
+                rgba(255,255,255,0.02) 100%);
+            backdrop-filter: blur(var(--blur));
+            -webkit-backdrop-filter: blur(var(--blur));
+            border: 1px solid rgba(255,255,255,0.1);
+            color: var(--t1);
+            font-size: 13px;
+            font-weight: 400;
+            cursor: pointer;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateX(-20px);
+            transition: all 0.5s var(--ease-vision);
+            font-family: inherit;
+        }
+
+        #detail-view.active ~ #hud .d-back,
+        #detail-view.active .d-back {
+            opacity: 1;
+            pointer-events: all;
+            transform: translateX(0);
+        }
+
+        .d-back:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.18);
+            transform: translateX(-4px);
+        }
+
+        #hud {
+            position: fixed; inset: 0; z-index: 20;
+            pointer-events: none;
+        }
+
+        #hud-top {
+            position: absolute;
+            top: 32px; left: 50%;
+            transform: translateX(-50%);
+            display: flex; align-items: center; gap: 12px;
+        }
+
+        #logo {
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            background: linear-gradient(90deg, var(--a1), var(--a2), var(--a3));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            background-size: 200% auto;
+            animation: logo-shimmer 6s ease infinite;
+        }
+
+        @keyframes logo-shimmer {
+            0%,100% { background-position: 0% center; }
+            50% { background-position: 200% center; }
+        }
+
+        #logo-dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: var(--a3);
+            box-shadow: 0 0 12px var(--a3);
+            animation: blink 2s ease-in-out infinite;
+        }
+
+        @keyframes blink {
+            0%,100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        #hint {
+            position: absolute;
+            bottom: 40px; left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: var(--t3);
+            letter-spacing: 0.08em;
+            display: flex; align-items: center; gap: 16px;
+            transition: opacity 0.6s var(--ease-vision);
+        }
+
+        #detail-view.active ~ #hud #hint { opacity: 0; }
+
+        .hint-item { display: flex; align-items: center; gap: 6px; }
+        .hint-k {
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.08);
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--t2);
+        }
+
+        #top-bar {
+            position: absolute;
+            top: 32px; right: 32px;
+            display: flex; gap: 8px;
+            pointer-events: all;
+        }
+
+        .tb-btn {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.04);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.06);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            color: var(--t2);
+            font-size: 16px;
+            transition: all 0.3s var(--ease-vision);
+        }
+
+        .tb-btn:hover {
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.12);
+            color: var(--t1);
+        }
+
+        #boot {
+            position: fixed; inset: 0; z-index: 1000;
+            background: #000;
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column; gap: 40px;
+            transition: opacity 0.8s var(--ease-vision);
+        }
+
+        #boot.done { opacity: 0; pointer-events: none; }
+
+        .boot-ring {
+            width: 80px; height: 80px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            border-top-color: var(--a1);
+            border-right-color: var(--a2);
+            animation: boot-spin 1.2s linear infinite;
+        }
+
+        @keyframes boot-spin { to { transform: rotate(360deg); } }
+
+        .boot-text {
+            font-size: 13px;
+            color: var(--t3);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            font-weight: 300;
+        }
+
+        .boot-bar {
+            width: 200px; height: 2px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .boot-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--a1), var(--a2), var(--a3));
+            border-radius: 2px;
+            width: 0%;
+            animation: boot-fill 1.6s var(--ease-vision) forwards;
+        }
+
+        @keyframes boot-fill { to { width: 100%; } }
+
+        .glow-orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            z-index: 0;
+            pointer-events: none;
+            opacity: 0.15;
+        }
+        #g1 { width: 600px; height: 600px; background: var(--a1); top: -200px; left: -100px; animation: float1 18s ease-in-out infinite; }
+        #g2 { width: 500px; height: 500px; background: var(--a2); bottom: -150px; right: -100px; animation: float2 22s ease-in-out infinite; }
+        #g3 { width: 400px; height: 400px; background: var(--a3); top: 40%; right: 20%; animation: float3 15s ease-in-out infinite; opacity: 0.08; }
+
+        @keyframes float1 {
+            0%,100% { transform: translate(0,0) scale(1); }
+            33% { transform: translate(80px,60px) scale(1.1); }
+            66% { transform: translate(40px,-40px) scale(0.9); }
+        }
+        @keyframes float2 {
+            0%,100% { transform: translate(0,0) scale(1); }
+            33% { transform: translate(-60px,-80px) scale(0.9); }
+            66% { transform: translate(-40px,40px) scale(1.1); }
+        }
+        @keyframes float3 {
+            0%,100% { transform: translate(0,0) scale(1); }
+            50% { transform: translate(-60px,-60px) scale(1.2); }
+        }
+    </style>
+</head>
+<body>
+    <div id="bg-layer">
+        <div id="g1" class="glow-orb"></div>
+        <div id="g2" class="glow-orb"></div>
+        <div id="g3" class="glow-orb"></div>
+    </div>
+    <canvas id="c-stars"></canvas>
+    <canvas id="c-nebula"></canvas>
+    <canvas id="c-particles"></canvas>
+    <canvas id="c-lines"></canvas>
+    <div id="cursor-glow"></div>
+
+    <div id="boot">
+        <div class="boot-ring"></div>
+        <div class="boot-text">Initializing Knowledge Universe</div>
+        <div class="boot-bar"><div class="boot-bar-fill"></div></div>
+    </div>
+
+    <div id="hud">
+        <div id="hud-top">
+            <span id="logo-dot"></span>
+            <span id="logo">Knowledge Universe</span>
+        </div>
+        <div id="top-bar">
+            <div class="tb-btn" title="重置视角">⟲</div>
+            <div class="tb-btn" title="搜索">⌕</div>
+            <div class="tb-btn" title="设置">⚙</div>
+        </div>
+        <div id="hint">
+            <span class="hint-item"><span class="hint-k">拖拽</span> 旋转空间</span>
+            <span class="hint-item"><span class="hint-k">滚轮</span> 缩放</span>
+            <span class="hint-item"><span class="hint-k">点击</span> 进入节点</span>
+        </div>
+    </div>
+
+    <div id="scene">
+        <div id="world"></div>
+    </div>
+
+    <div id="detail-view">
+        <button class="d-back" id="back-btn">← 返回宇宙</button>
+        <div class="d-core" id="d-core">
+            <span class="d-title" id="d-title"></span>
+            <span class="d-subtitle" id="d-sub"></span>
+            <span class="d-desc" id="d-desc"></span>
+        </div>
+        <div id="d-panels"></div>
+    </div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        let W = window.innerWidth, H = window.innerHeight;
+
+        const knowledgeTree = {
+            id: 'ai', name: '人工智能', sub: 'ARTIFICIAL INTELLIGENCE',
+            desc: '研究如何使机器模拟、延伸和扩展人类智能的科学',
+            color: '#60A5FA', level: 0,
+            desc_detail: '人工智能是计算机科学的一个分支，致力于创建能够执行通常需要人类智能的任务的系统。',
+            children: [
+                {
+                    id: 'ml', name: '机器学习', sub: 'MACHINE LEARNING', color: '#A78BFA', level: 1,
+                    desc: '从数据中自动学习规律并做出预测或决策',
+                    children: [
+                        {
+                            id: 'dl', name: '深度学习', sub: 'DEEP LEARNING', color: '#22D3EE', level: 2,
+                            desc: '基于多层神经网络的表示学习方法',
+                            children: [
+                                {
+                                    id: 'transformer', name: 'Transformer', sub: 'ATTENTION IS ALL YOU NEED', color: '#F472B6', level: 3,
+                                    desc: '基于自注意力机制的序列建模架构，现代AI的基石',
+                                    desc_detail: 'Transformer由Vaswani等人于2017年提出，完全摒弃了RNN和CNN，仅使用注意力机制实现序列建模。它是GPT、BERT、LLaMA等大语言模型的核心架构。',
+                                    panels: [
+                                        { icon: '⚡', title: '核心原理', text: '自注意力机制允许模型在处理每个位置时，直接关注序列中的所有其他位置，通过Query、Key、Value三个投影矩阵计算注意力权重，实现全局依赖建模。', delay: 0 },
+                                        { icon: '📜', title: '发展历史', text: '2017年Google论文《Attention Is All You Need》提出。2018年BERT刷新NLP榜单，2020年GPT-3展示涌现能力，2022年ChatGPT引爆通用AI浪潮。', delay: 0.08 },
+                                        { icon: '∑', title: '数学基础', text: 'Attention(Q,K,V) = softmax(QK^T/√d_k)V。Q、K、V分别由输入线性变换得到，点积计算相似度，除以√d_k防止梯度消失，softmax归一化后加权V。', delay: 0.16 },
+                                        { icon: '🔬', title: '应用场景', text: '自然语言理解与生成、机器翻译、文本摘要、代码生成、图像生成（ViT/DALL-E）、语音识别、蛋白质结构预测（AlphaFold）、机器人控制等。', delay: 0.24 },
+                                        { icon: '📄', title: '关键论文', text: '<div class="d-tags"><span class="d-tag">Attention Is All You Need (2017)</span><span class="d-tag">BERT (2018)</span><span class="d-tag">GPT-3 (2020)</span><span class="d-tag">ViT (2020)</span></div>', delay: 0.32 },
+                                        { icon: '💻', title: '代码核心', text: '<div style="font-family:monospace;font-size:11px;background:rgba(0,0,0,0.3);padding:12px;border-radius:12px;color:#c4b5fd;line-height:1.6">q,k,v = x@Wq, x@Wk, x@Wv<br>attn = softmax(q@k.T/√d, -1)<br>out = attn @ v</div>', delay: 0.4 },
+                                        { icon: '🌌', title: '延伸方向', text: '<div class="d-tags"><span class="d-tag">Mamba/SSM</span><span class="d-tag">MoE混合专家</span><span class="d-tag">多模态融合</span><span class="d-tag">高效推理</span><span class="d-tag">长上下文</span></div>', delay: 0.48 }
+                                    ],
+                                    children: []
+                                },
+                                { id: 'cnn', name: 'CNN', sub: 'CONV NETS', color: '#34D399', level: 3, desc: '卷积神经网络，擅长网格结构数据处理', children: [] },
+                                { id: 'rnn', name: 'RNN/LSTM', sub: 'SEQUENTIAL', color: '#FBBF24', level: 3, desc: '处理序列数据的循环网络结构', children: [] }
+                            ]
+                        },
+                        { id: 'rf', name: '随机森林', color: '#60A5FA', level: 2, desc: '集成学习方法，多棵决策树投票', children: [] },
+                        { id: 'svm', name: 'SVM', color: '#A78BFA', level: 2, desc: '支持向量机，最大间隔分类器', children: [] }
+                    ]
+                },
+                {
+                    id: 'nlp', name: '自然语言处理', sub: 'NLP', color: '#F472B6', level: 1,
+                    desc: '让计算机理解、生成和处理人类语言',
+                    children: [
+                        { id: 'llm', name: '大语言模型', sub: 'LLM', color: '#22D3EE', level: 2, desc: '基于海量文本训练的超大规模语言模型',
+                            children: [
+                                { id: 'agent', name: 'AI Agent', sub: 'AUTONOMY', color: '#FBBF24', level: 3, desc: '能自主规划、工具调用、完成复杂任务的AI系统', children: [] },
+                                { id: 'rag', name: 'RAG检索', sub: 'RETRIEVAL', color: '#34D399', level: 3, desc: '检索增强生成，结合外部知识库的LLM', children: [] }
+                            ]
+                        },
+                        { id: 'embedding', name: '词向量', color: '#A78BFA', level: 2, desc: '将文本映射到稠密向量空间', children: [] }
+                    ]
+                },
+                {
+                    id: 'cv', name: '计算机视觉', sub: 'COMPUTER VISION', color: '#34D399', level: 1,
+                    desc: '使机器"看"懂图像和视频的技术',
+                    children: [
+                        { id: 'detect', name: '目标检测', color: '#22D3EE', level: 2, desc: '在图像中定位和识别物体', children: [] },
+                        { id: 'gen', name: '图像生成', color: '#F472B6', level: 2, desc: 'Diffusion/GAN生成图像内容', children: [] }
+                    ]
+                },
+                {
+                    id: 'frontend', name: '前端开发', sub: 'FRONTEND', color: '#FBBF24', level: 1,
+                    desc: '构建用户界面和交互体验的技术栈',
+                    children: [
+                        { id: 'react', name: 'React', color: '#60A5FA', level: 2, desc: '声明式组件化UI框架', children: [] },
+                        { id: 'webgl', name: 'WebGL', color: '#A78BFA', level: 2, desc: '浏览器端GPU加速图形渲染', children: [] }
+                    ]
+                },
+                {
+                    id: 'math', name: '数学基础', sub: 'MATHEMATICS', color: '#22D3EE', level: 1,
+                    desc: 'AI背后的线性代数、概率与优化理论',
+                    children: [
+                        { id: 'linalg', name: '线性代数', color: '#F472B6', level: 2, desc: '向量、矩阵、特征值、奇异值分解', children: [] },
+                        { id: 'prob', name: '概率统计', color: '#34D399', level: 2, desc: '贝叶斯推断、分布、假设检验', children: [] }
+                    ]
+                }
+            ]
+        };
+
+        const starsCvs = document.getElementById('c-stars');
+        const nebCvs = document.getElementById('c-nebula');
+        const partCvs = document.getElementById('c-particles');
+        const lineCvs = document.getElementById('c-lines');
+        const world = document.getElementById('world');
+        const detailView = document.getElementById('detail-view');
+        const dPanels = document.getElementById('d-panels');
+        const cursorGlow = document.getElementById('cursor-glow');
+        const boot = document.getElementById('boot');
+
+        let state;
+
+        function resize() {
+            W = window.innerWidth;
+            H = window.innerHeight;
+            [starsCvs, nebCvs, partCvs, lineCvs].forEach(c => {
+                c.width = W;
+                c.height = H;
+            });
+            if (state) {
+                state.mx = state.cmx = W/2;
+                state.my = state.cmy = H/2;
+            }
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        const starsCtx = starsCvs.getContext('2d');
+        const nebCtx = nebCvs.getContext('2d');
+        const partCtx = partCvs.getContext('2d');
+        const lineCtx = lineCvs.getContext('2d');
+
+        const stars = [];
+        for (let i = 0; i < 500; i++) {
+            stars.push({
+                x: Math.random(),
+                y: Math.random(),
+                z: Math.random() * 0.8 + 0.2,
+                r: Math.random() * 1.5 + 0.3,
+                tw: Math.random() * Math.PI * 2,
+                sp: Math.random() * 0.02 + 0.005
+            });
+        }
+
+        const nebulas = [];
+        for (let i = 0; i < 5; i++) {
+            nebulas.push({
+                x: Math.random(), y: Math.random(),
+                r: Math.random() * 300 + 200,
+                c: ['#60A5FA','#A78BFA','#22D3EE','#F472B6','#34D399'][i],
+                a: Math.random() * 0.06 + 0.02
+            });
+        }
+
+        const particles = [];
+        const PCOUNT = 80;
+        function spawnParticle() {
+            const a = Math.random() * Math.PI * 2;
+            const r = Math.random() * 600 + 200;
+            particles.push({
+                x: Math.cos(a) * r,
+                y: (Math.random() - 0.5) * 400,
+                z: Math.sin(a) * r,
+                vx: (Math.random()-0.5)*0.15,
+                vy: (Math.random()-0.5)*0.1,
+                vz: (Math.random()-0.5)*0.15,
+                life: Math.random()*600+300,
+                age: 0,
+                c: ['#60A5FA','#A78BFA','#22D3EE','#F472B6'][Math.floor(Math.random()*4)],
+                sz: Math.random()*2+0.5
+            });
+        }
+        for (let i = 0; i < PCOUNT; i++) { spawnParticle(); particles[i].age = Math.random() * particles[i].life; }
+
+        let allNodes = [];
+        let nodeEls = [];
+        let edges = [];
+
+        function spherical(r, theta, phi) {
+            const sinPhi = Math.sin(phi);
+            return {
+                x: r * sinPhi * Math.cos(theta),
+                y: r * Math.cos(phi),
+                z: r * sinPhi * Math.sin(theta)
+            };
+        }
+
+        function flattenTree(node, depth, parentTheta, parentPhi, parent) {
+            const n = {
+                ...node,
+                depth,
+                parent,
+                ox: 0, oy: 0, oz: 0,
+                mx: 0, my: 0,
+                vx: 0, vy: 0, vz: 0
+            };
+            allNodes.push(n);
+            if (parent) edges.push({ from: parent, to: n });
+
+            const childCount = node.children ? node.children.length : 0;
+            if (childCount > 0) {
+                const r = depth === 0 ? 340 : depth === 1 ? 200 : 150;
+                const phiSpread = depth === 0 ? Math.PI * 0.85 : Math.PI * 0.5;
+                const thetaSpread = depth === 0 ? Math.PI * 2 : Math.PI * 1.2;
+                const basePhi = depth === 0 ? Math.PI * 0.5 : parentPhi;
+                const baseTheta = parentTheta;
+
+                node.children.forEach((child, i) => {
+                    let theta, phi;
+                    if (depth === 0) {
+                        const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+                        theta = (goldenAngle * i) % (Math.PI * 2);
+                        phi = Math.acos(1 - 2 * (i + 0.5) / childCount);
+                    } else {
+                        const frac = childCount === 1 ? 0.5 : i / (childCount - 1);
+                        theta = baseTheta + (frac - 0.5) * thetaSpread + (Math.random()-0.5)*0.3;
+                        phi = basePhi + (frac - 0.5) * phiSpread * 0.5 + (Math.random()-0.5)*0.2;
+                        phi = Math.max(0.3, Math.min(Math.PI - 0.3, phi));
+                    }
+                    const pos = spherical(r, theta, phi);
+                    child._ox = pos.x;
+                    child._oy = pos.y;
+                    child._oz = pos.z;
+                    child._theta = theta;
+                    child._phi = phi;
+                    flattenTree(child, depth+1, theta, phi, n);
+                });
+            }
+        }
+
+        function assignPositions(node) {
+            if (node._ox !== undefined) {
+                const n = allNodes.find(x => x.id === node.id);
+                if (n) {
+                    n.ox = node._ox;
+                    n.oy = node._oy;
+                    n.oz = node._oz;
+                }
+            }
+            if (node.children) node.children.forEach(assignPositions);
+        }
+
+        flattenTree(knowledgeTree, 0, 0, Math.PI/2, null);
+        assignPositions(knowledgeTree);
+
+        allNodes.forEach(n => {
+            n.orbitAngle = Math.random() * Math.PI * 2;
+            n.orbitSpeed = (Math.random() * 0.3 + 0.2) * (0.8 - n.depth * 0.15) * 0.001;
+            n.orbitRadius = n.depth === 0 ? 0 : 15 + n.depth * 5;
+            n.floatPhase = Math.random() * Math.PI * 2;
+        });
+
+        state = {
+            rotX: -0.4, tRotX: -0.4,
+            rotY: 0.5, tRotY: 0.5,
+            zoom: 0.85, tZoom: 0.85,
+            mx: W/2, my: H/2,
+            pmx: W/2, pmy: H/2,
+            cmx: W/2, cmy: H/2,
+            dragging: false,
+            lx: 0, ly: 0,
+            time: 0,
+            detail: false,
+            activeNode: null,
+            transition: 0,
+            hovered: null
+        };
+
+        function project(x, y, z) {
+            const fov = 1200;
+            const cy = Math.cos(state.rotY), sy = Math.sin(state.rotY);
+            const cx = Math.cos(state.rotX), sx = Math.sin(state.rotX);
+
+            let x1 = x * cy - z * sy;
+            let z1 = x * sy + z * cy;
+            let y1 = y * cx - z1 * sx;
+            let z2 = y * sx + z1 * cx;
+
+            const s = fov / (fov + z2) * state.zoom;
+            return {
+                x: W/2 + x1 * s,
+                y: H/2 + y1 * s,
+                z: z2,
+                s: s,
+                visible: z2 > -fov*0.8
+            };
+        }
+
+        function hexToRgb(hex) {
+            const h = hex.replace('#','');
+            const r = parseInt(h.substring(0,2),16);
+            const g = parseInt(h.substring(2,4),16);
+            const b = parseInt(h.substring(4,6),16);
+            return `${r},${g},${b}`;
+        }
+
+        function buildDOM() {
+            world.innerHTML = '';
+            nodeEls = [];
+            allNodes.forEach((n, i) => {
+                const el = document.createElement('div');
+                el.className = 'k-node';
+                el.dataset.id = n.id;
+
+                let glassClass = 'k-core';
+                if (n.level === 1) glassClass = 'k-l1';
+                else if (n.level === 2) glassClass = 'k-l2';
+                else if (n.level === 3) glassClass = 'k-l3';
+
+                let rings = '';
+                if (n.level === 0) {
+                    rings = '<div class="k-ring k-ring-inner"></div><div class="k-ring k-ring-outer"></div>';
+                }
+
+                const subHtml = n.sub ? `<span class="k-sub">${n.sub}</span>` : '';
+                el.innerHTML = `
+                    ${rings}
+                    <div class="${glassClass}" style="--nc:${hexToRgb(n.color)}">
+                        <span class="k-label">${n.name}</span>
+                        ${subHtml}
+                    </div>
+                `;
+                world.appendChild(el);
+                nodeEls.push({ node: n, el, glass: el.querySelector('.' + glassClass) });
+            });
+        }
+        buildDOM();
+
+        function drawStars() {
+            starsCtx.clearRect(0,0,W,H);
+            const px = (state.cmx - W/2) * 0.001;
+            const py = (state.cmy - H/2) * 0.001;
+            stars.forEach(s => {
+                s.tw += s.sp;
+                const alpha = 0.3 + Math.sin(s.tw) * 0.4 + 0.3;
+                const x = s.x * W + px * s.z * 20;
+                const y = s.y * H + py * s.z * 20;
+                starsCtx.beginPath();
+                starsCtx.arc(x, y, s.r * s.z, 0, Math.PI*2);
+                starsCtx.fillStyle = `rgba(255,255,255,${alpha * s.z * 0.8})`;
+                starsCtx.fill();
+            });
+        }
+
+        function drawNebula() {
+            nebCtx.clearRect(0,0,W,H);
+            nebulas.forEach(n => {
+                const g = nebCtx.createRadialGradient(n.x*W, n.y*H, 0, n.x*W, n.y*H, n.r);
+                g.addColorStop(0, n.c + Math.floor(n.a*255).toString(16).padStart(2,'0'));
+                g.addColorStop(0.4, n.c + Math.floor(n.a*0.3*255).toString(16).padStart(2,'0'));
+                g.addColorStop(1, 'transparent');
+                nebCtx.fillStyle = g;
+                nebCtx.fillRect(n.x*W - n.r, n.y*H - n.r, n.r*2, n.r*2);
+            });
+        }
+
+        function drawParticles() {
+            partCtx.clearRect(0,0,W,H);
+            particles.forEach((p, i) => {
+                p.age++;
+                p.x += p.vx;
+                p.y += p.vy;
+                p.z += p.vz;
+
+                const core = allNodes[0];
+                const dx = -p.x*0.0001, dy = -p.y*0.0001, dz = -p.z*0.0001;
+                p.vx += dx; p.vy += dy; p.vz += dz;
+                p.vx *= 0.999; p.vy *= 0.999; p.vz *= 0.999;
+
+                if (p.age > p.life) {
+                    particles[i] = null;
+                    spawnParticle();
+                    return;
+                }
+
+                const pr = project(p.x, p.y, p.z);
+                if (!pr.visible) return;
+                const lifeRatio = p.age / p.life;
+                const alpha = Math.sin(lifeRatio * Math.PI) * 0.6;
+                const sz = p.sz * pr.s;
+
+                const g = partCtx.createRadialGradient(pr.x, pr.y, 0, pr.x, pr.y, sz*4);
+                g.addColorStop(0, p.c);
+                g.addColorStop(0.3, p.c + '80');
+                g.addColorStop(1, 'transparent');
+                partCtx.fillStyle = g;
+                partCtx.globalAlpha = alpha;
+                partCtx.beginPath();
+                partCtx.arc(pr.x, pr.y, sz*4, 0, Math.PI*2);
+                partCtx.fill();
+                partCtx.globalAlpha = 1;
+            });
+
+            for (let i = particles.length-1; i >= 0; i--) {
+                if (particles[i] === null) particles.splice(i,1);
+            }
+        }
+
+        function drawLines() {
+            lineCtx.clearRect(0,0,W,H);
+            edges.forEach(e => {
+                const fromOrbitX = Math.cos(e.from.orbitAngle) * e.from.orbitRadius;
+                const fromOrbitZ = Math.sin(e.from.orbitAngle) * e.from.orbitRadius;
+                const fromFloatY = Math.sin(e.from.floatPhase) * (5 + e.from.depth * 3);
+                const toOrbitX = Math.cos(e.to.orbitAngle) * e.to.orbitRadius;
+                const toOrbitZ = Math.sin(e.to.orbitAngle) * e.to.orbitRadius;
+                const toFloatY = Math.sin(e.to.floatPhase) * (5 + e.to.depth * 3);
+
+                const a = project(
+                    e.from.ox + fromOrbitX + e.from.mx,
+                    e.from.oy + fromFloatY + e.from.my,
+                    e.from.oz + fromOrbitZ
+                );
+                const b = project(
+                    e.to.ox + toOrbitX + e.to.mx,
+                    e.to.oy + toFloatY + e.to.my,
+                    e.to.oz + toOrbitZ
+                );
+                if (!a.visible || !b.visible) return;
+
+                const grad = lineCtx.createLinearGradient(a.x, a.y, b.x, b.y);
+                grad.addColorStop(0, e.from.color + '40');
+                grad.addColorStop(1, e.to.color + '20');
+                lineCtx.strokeStyle = grad;
+                lineCtx.lineWidth = Math.min(a.s, b.s) * 1.2;
+                lineCtx.beginPath();
+                lineCtx.moveTo(a.x, a.y);
+
+                const mx = (a.x + b.x)/2 + Math.sin(state.time*0.5 + e.from.depth) * 10;
+                const my = (a.y + b.y)/2 - Math.abs(a.x-b.x)*0.1;
+                lineCtx.quadraticCurveTo(mx, my, b.x, b.y);
+                lineCtx.stroke();
+
+                const pulsePos = (Math.sin(state.time * 0.8 + e.from.depth * 2 + e.to.depth) + 1) / 2;
+                const px = a.x + (b.x - a.x) * pulsePos + (mx - (a.x+b.x)/2) * Math.sin(pulsePos * Math.PI);
+                const py = a.y + (b.y - a.y) * pulsePos + (my - (a.y+b.y)/2) * Math.sin(pulsePos * Math.PI);
+                lineCtx.beginPath();
+                lineCtx.arc(px, py, 2.5 * Math.min(a.s,b.s), 0, Math.PI*2);
+                lineCtx.fillStyle = e.to.color;
+                lineCtx.shadowColor = e.to.color;
+                lineCtx.shadowBlur = 12;
+                lineCtx.fill();
+                lineCtx.shadowBlur = 0;
+            });
+        }
+
+        function updateNodes() {
+            const detLerp = state.detail ? Math.min(1, state.transition) : Math.max(0, 1 - state.transition);
+
+            nodeEls.forEach(({node, el, glass}) => {
+                node.floatPhase += 0.008;
+                node.orbitAngle += node.orbitSpeed;
+
+                const floatY = Math.sin(node.floatPhase) * (5 + node.depth * 3);
+                const orbitX = Math.cos(node.orbitAngle) * node.orbitRadius;
+                const orbitZ = Math.sin(node.orbitAngle) * node.orbitRadius;
+
+                let dx = 0, dy = 0;
+                if (state.hovered === node && !state.detail) {
+                    const p = project(node.ox, node.oy, node.oz);
+                    const mdx = state.cmx - p.x;
+                    const mdy = state.cmy - p.y;
+                    const dist = Math.sqrt(mdx*mdx + mdy*mdy);
+                    if (dist < 120) {
+                        const force = (1 - dist/120) * 25;
+                        dx = mdx / dist * force;
+                        dy = mdy / dist * force;
+                    }
+                }
+
+                node.vx += (dx - node.mx) * 0.15;
+                node.vy += (dy - node.my) * 0.15;
+                node.vx *= 0.75;
+                node.vy *= 0.75;
+                node.mx += node.vx;
+                node.my += node.vy;
+
+                const tx = node.ox + orbitX + node.mx;
+                const ty = node.oy + floatY + node.my;
+                const tz = node.oz + orbitZ;
+
+                let scaleVal = 1;
+                let opacity = 1;
+
+                if (state.detail) {
+                    if (node === state.activeNode) {
+                        scaleVal = 1 + detLerp * 1.5;
+                        opacity = 1 - detLerp * 0.8;
+                    } else {
+                        scaleVal = 1 - detLerp * 0.8;
+                        opacity = 1 - detLerp;
+                    }
+                }
+
+                const p = project(tx, ty, tz);
+                const zScale = Math.max(0.3, Math.min(2, p.s));
+                const finalScale = zScale * scaleVal;
+                const zIndex = Math.round(10000 - p.z);
+
+                el.style.transform = `translate3d(${p.x}px, ${p.y}px, 0) scale(${finalScale})`;
+                el.style.opacity = opacity * (p.visible ? 1 : 0);
+                el.style.zIndex = zIndex;
+                el.style.display = p.visible ? 'block' : 'none';
+
+                if (node === state.activeNode && state.detail && detLerp > 0.5) {
+                    el.style.opacity = 0;
+                }
+            });
+        }
+
+        function openDetail(node) {
+            state.detail = true;
+            state.activeNode = node;
+            state.transition = 0;
+            detailView.classList.add('active');
+
+            document.getElementById('d-title').textContent = node.name;
+            document.getElementById('d-sub').textContent = node.sub || '';
+            document.getElementById('d-desc').textContent = node.desc_detail || node.desc || '';
+
+            const dCore = document.getElementById('d-core');
+            const color = node.color || '#60A5FA';
+            dCore.style.boxShadow = `
+                0 0 120px ${color}33,
+                0 0 240px ${color}22,
+                inset 0 2px 4px rgba(255,255,255,0.25),
+                inset 0 -2px 4px rgba(0,0,0,0.2),
+                inset 0 0 100px ${color}15`;
+
+            dPanels.innerHTML = '';
+            const panels = node.panels || getDefaultPanels(node);
+            const panelCount = panels.length;
+            const radius = Math.min(W, H) * 0.28;
+
+            panels.forEach((p, i) => {
+                const angle = (i / panelCount) * Math.PI * 2 - Math.PI/2;
+                const px = W/2 + Math.cos(angle) * radius;
+                const py = H/2 + Math.sin(angle) * radius;
+
+                const panel = document.createElement('div');
+                panel.className = 'd-panel';
+                panel.style.left = px + 'px';
+                panel.style.top = py + 'px';
+                panel.style.transform = `translate(-50%,-50%) scale(0)`;
+                panel.style.transitionDelay = (p.delay !== undefined ? p.delay : i*0.07) + 's';
+
+                const tiltX = (py - H/2) / (H/2) * 8;
+                const tiltY = -(px - W/2) / (W/2) * 8;
+
+                panel.innerHTML = `
+                    <span class="d-panel-icon">${p.icon}</span>
+                    <div class="d-panel-title">${p.title}</div>
+                    <div class="d-panel-text">${p.text}</div>
+                `;
+
+                panel.addEventListener('mouseenter', () => {
+                    panel.style.transform = `translate(-50%,-50%) scale(1.04) translateZ(20px)`;
+                });
+                panel.addEventListener('mouseleave', () => {
+                    panel.style.transform = `translate(-50%,-50%) scale(1) translateZ(0)`;
+                });
+
+                dPanels.appendChild(panel);
+                setTimeout(() => {
+                    panel.style.transform = `translate(-50%,-50%) scale(1) rotateX(${tiltX}deg) rotateY(${tiltY}deg)`;
+                }, 50);
+            });
+        }
+
+        function getDefaultPanels(node) {
+            return [
+                { icon: '💡', title: '核心概念', text: node.desc || '该知识点的核心定义与关键思想', delay: 0 },
+                { icon: '🔗', title: '知识关联', text: `与${node.name}相关的上下游知识领域，构成完整的知识网络`, delay: 0.08 },
+                { icon: '📚', title: '学习路径', text: '建议的前置知识、核心资料和进阶方向', delay: 0.16 },
+                { icon: '🛠', title: '实践应用', text: '该知识在实际项目和产业中的应用场景', delay: 0.24 },
+                { icon: '📈', title: '发展趋势', text: '该领域的最新研究进展和未来方向', delay: 0.32 }
+            ];
+        }
+
+        function closeDetail() {
+            state.detail = false;
+            state.transition = 1;
+            detailView.classList.remove('active');
+            dPanels.innerHTML = '';
+            state.activeNode = null;
+        }
+
+        document.getElementById('back-btn').addEventListener('click', closeDetail);
+
+        document.addEventListener('mousedown', e => {
+            if (e.button !== 0) return;
+            if (state.detail) return;
+            state.dragging = true;
+            state.lx = e.clientX;
+            state.ly = e.clientY;
+        });
+
+        document.addEventListener('mousemove', e => {
+            state.mx = e.clientX;
+            state.my = e.clientY;
+
+            cursorGlow.style.left = state.cmx + 'px';
+            cursorGlow.style.top = state.cmy + 'px';
+
+            if (state.dragging) {
+                const dx = e.clientX - state.lx;
+                const dy = e.clientY - state.ly;
+                state.tRotY += dx * 0.005;
+                state.tRotX += dy * 0.005;
+                state.tRotX = Math.max(-1.2, Math.min(1.2, state.tRotX));
+                state.lx = e.clientX;
+                state.ly = e.clientY;
+            }
+        });
+
+        document.addEventListener('mouseup', e => {
+            state.dragging = false;
+        });
+
+        document.addEventListener('wheel', e => {
+            if (state.detail) return;
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.92 : 1.08;
+            state.tZoom = Math.max(0.4, Math.min(2.5, state.tZoom * delta));
+        }, { passive: false });
+
+        world.addEventListener('click', e => {
+            if (state.detail) return;
+            const target = e.target.closest('.k-node');
+            if (!target) return;
+            const id = target.dataset.id;
+            const node = allNodes.find(n => n.id === id);
+            if (node && node.level >= 2) {
+                openDetail(node);
+            } else if (node) {
+                const p = project(node.ox, node.oy, node.oz);
+                const dx = W/2 - p.x;
+                const dy = H/2 - p.y;
+                state.tRotY += dx * 0.003;
+                state.tRotX += dy * 0.003;
+                if (node.children && node.children.length > 0) {
+                    state.tZoom = Math.min(2, state.tZoom * 1.2);
+                }
+            }
+        });
+
+        let nearestDist = Infinity;
+        world.addEventListener('mousemove', e => {
+            if (state.detail) return;
+            nearestDist = Infinity;
+            state.hovered = null;
+            nodeEls.forEach(({node, el}) => {
+                const p = project(node.ox, node.oy, node.oz);
+                const dx = e.clientX - p.x;
+                const dy = e.clientY - p.y;
+                const dist = Math.sqrt(dx*dx+dy*dy);
+                const hitR = node.level === 0 ? 110 : node.level === 1 ? 70 : node.level === 2 ? 50 : 36;
+                if (dist < hitR * p.s && dist < nearestDist) {
+                    nearestDist = dist;
+                    state.hovered = node;
+                }
+            });
+            document.body.style.cursor = state.hovered ? 'pointer' : 'default';
+        });
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && state.detail) closeDetail();
+        });
+
+        document.querySelector('.tb-btn[title="重置视角"]').addEventListener('click', () => {
+            state.tRotX = -0.4;
+            state.tRotY = 0.5;
+            state.tZoom = 0.85;
+        });
+
+        function loop() {
+            state.time += 0.016;
+            if (state.detail) {
+                state.transition = Math.min(1, state.transition + 0.025);
+            } else if (state.transition > 0) {
+                state.transition = Math.max(0, state.transition - 0.025);
+            }
+
+            state.rotX += (state.tRotX - state.rotX) * 0.08;
+            state.rotY += (state.tRotY - state.rotY) * 0.08;
+            state.zoom += (state.tZoom - state.zoom) * 0.1;
+
+            state.cmx += (state.mx - state.cmx) * 0.1;
+            state.cmy += (state.my - state.cmy) * 0.1;
+
+            if (!state.dragging && !state.detail) {
+                state.tRotY += 0.0004;
+            }
+
+            drawStars();
+            drawNebula();
+            drawLines();
+            drawParticles();
+            updateNodes();
+
+            requestAnimationFrame(loop);
+        }
+
+        setTimeout(() => {
+            boot.classList.add('done');
+            setTimeout(() => boot.remove(), 900);
+        }, 1800);
+
+        loop();
+    })();
+    </script>
+</body>
+</html>

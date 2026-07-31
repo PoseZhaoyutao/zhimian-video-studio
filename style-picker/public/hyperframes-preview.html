@@ -1,0 +1,2031 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HyperFrames 动效预览 · BERT双任务 · 7月15日</title>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/MotionPathPlugin.min.js"></script>
+<script>
+  gsap.registerPlugin(MotionPathPlugin);
+  gsap.config({force3D: true});
+</script>
+<style>
+  :root {
+    --bg-deep: #05050a;
+    --bg-panel: #0d0d18;
+    --bg-card: #161625;
+    --border: rgba(255,255,255,0.06);
+    --border-strong: rgba(255,255,255,0.15);
+    --text: #f5f5fa;
+    --text-muted: #7a7a90;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", -apple-system, sans-serif;
+    background: var(--bg-deep);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 20px;
+    position: relative;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: 
+      radial-gradient(circle at 20% 20%, rgba(255,45,85,0.08) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(0,212,255,0.08) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  header {
+    text-align: center;
+    margin-bottom: 24px;
+    position: relative;
+    z-index: 1;
+  }
+  header h1 {
+    font-size: 28px;
+    font-weight: 950;
+    background: linear-gradient(90deg, #ff2d55, #ffb300, #00d4ff, #ff2d55);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gradient-shift 4s linear infinite;
+    margin-bottom: 6px;
+  }
+  @keyframes gradient-shift {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 300% 50%; }
+  }
+  header p { color: var(--text-muted); font-size: 13px; }
+  .toolbar {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 1;
+  }
+  .toolbar button {
+    background: var(--bg-card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.25s;
+    font-family: inherit;
+    font-weight: 600;
+  }
+  .toolbar button:hover {
+    border-color: var(--border-strong);
+    background: #20202f;
+    transform: translateY(-1px);
+  }
+  .toolbar button.active {
+    border-color: #ff2d55;
+    background: rgba(255,45,85,0.15);
+    box-shadow: 0 0 12px rgba(255,45,85,0.3);
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+    max-width: 1500px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+  .scene-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .scene-card:hover {
+    border-color: rgba(0,212,255,0.3);
+    box-shadow: 0 4px 20px rgba(0,212,255,0.1);
+  }
+  .scene-header {
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+  .scene-header .label {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 2px;
+  }
+  .scene-header .title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .style-tabs {
+    display: flex;
+    gap: 2px;
+    background: var(--bg-deep);
+    padding: 3px;
+    border-radius: 7px;
+  }
+  .style-tab {
+    padding: 4px 8px;
+    font-size: 10px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    font-weight: 600;
+  }
+  .style-tab:hover { color: var(--text); }
+  .style-tab.active {
+    background: var(--bg-card);
+    color: var(--text);
+  }
+  .preview-frame {
+    width: 100%;
+    aspect-ratio: 9/16;
+    max-height: 500px;
+    margin: 0 auto;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    perspective: 800px;
+  }
+  .scene-footer {
+    padding: 8px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--border);
+  }
+  .scene-footer .replay {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .scene-footer .replay:hover {
+    color: var(--text);
+    border-color: var(--border-strong);
+  }
+  .scene-footer .selected-style {
+    font-size: 11px;
+    color: #00d4ff;
+    font-weight: 600;
+  }
+  .save-bar {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    z-index: 100;
+  }
+  .save-bar button {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.3s;
+  }
+  .save-bar .save-btn {
+    background: linear-gradient(135deg, #ff2d55, #ff6b35);
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(255,45,85,0.4);
+  }
+  .save-bar .save-btn:hover {
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 8px 30px rgba(255,45,85,0.6);
+  }
+
+  /* ═══ 预览内容通用样式 ═══ */
+  .preview-content {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    transform-style: preserve-3d;
+  }
+  .flow-field {
+    position: absolute;
+    inset: -30%;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    filter: blur(80px);
+    z-index: 0;
+  }
+  .flow-field-2 {
+    position: absolute;
+    inset: -40%;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    filter: blur(100px);
+    z-index: 0;
+    opacity: 0.5;
+  }
+  .scan-lines {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10;
+    opacity: 0.08;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.5) 2px, rgba(0,0,0,0.5) 4px);
+  }
+  .noise-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  }
+  .vignette {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 8;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.4) 100%);
+  }
+  .grid-bg {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    background-image: 
+      linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 30px 30px;
+  }
+  .grid-bg-far {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    background-image: 
+      linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+    background-size: 60px 60px;
+    transform: translateZ(-50px);
+  }
+  .orbital-ring {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 200px;
+    height: 200px;
+    margin: -100px 0 0 -100px;
+    border: 1px solid;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.2;
+  }
+  .orbital-dot {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .ambient-particle {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .shimmer-text {
+    background: linear-gradient(90deg, currentColor 0%, currentColor 40%, #fff 50%, currentColor 60%, currentColor 100%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .light-ray {
+    position: absolute;
+    top: -20%;
+    width: 2px;
+    height: 140%;
+    pointer-events: none;
+    z-index: 3;
+    opacity: 0.2;
+    filter: blur(2px);
+  }
+  .big-number {
+    position: absolute;
+    top: 10%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 72px;
+    font-weight: 950;
+    line-height: 1;
+    letter-spacing: -3px;
+    z-index: 2;
+  }
+  .subtitle {
+    position: absolute;
+    top: 28%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 15px;
+    z-index: 2;
+    white-space: nowrap;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .headline {
+    position: absolute;
+    top: 14%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 24px;
+    font-weight: 900;
+    z-index: 2;
+    text-align: center;
+    width: 80%;
+    line-height: 1.3;
+  }
+  .compare-cards {
+    position: absolute;
+    top: 38%;
+    left: 6%;
+    right: 6%;
+    display: flex;
+    gap: 10px;
+    z-index: 2;
+  }
+  .compare-card {
+    flex: 1;
+    border-radius: 12px;
+    padding: 16px 8px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .compare-card .card-label {
+    font-size: 14px;
+    font-weight: 800;
+    margin-bottom: 8px;
+    line-height: 1.5;
+  }
+  .compare-card .card-icon {
+    font-size: 36px;
+    font-weight: 950;
+  }
+  .compare-card .card-sub {
+    font-size: 10px;
+    margin-top: 8px;
+    opacity: 0.7;
+    line-height: 1.4;
+  }
+  .flow-steps {
+    position: absolute;
+    top: 36%;
+    left: 6%;
+    right: 6%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 2;
+  }
+  .flow-step {
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: relative;
+    overflow: hidden;
+  }
+  .flow-step .step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .flow-step .step-text {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .energy-line {
+    position: absolute;
+    left: 20px;
+    width: 2px;
+    pointer-events: none;
+    z-index: 3;
+    opacity: 0;
+  }
+  .formula-row {
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 2;
+    width: 80%;
+  }
+  .formula-token {
+    padding: 14px 20px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .code-card {
+    position: absolute;
+    top: 38%;
+    left: 6%;
+    right: 6%;
+    border-radius: 10px;
+    padding: 14px;
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-size: 13px;
+    z-index: 2;
+    line-height: 1.8;
+    position: relative;
+    overflow: hidden;
+  }
+  .code-line {
+    line-height: 1.8;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-weight: 600;
+  }
+  .cursor-block {
+    display: inline-block;
+    width: 7px;
+    height: 14px;
+    vertical-align: middle;
+    margin-left: 2px;
+  }
+  .scan-line-beam {
+    position: absolute;
+    left: 0; right: 0;
+    height: 30px;
+    pointer-events: none;
+    z-index: 5;
+    opacity: 0;
+  }
+  .process-steps {
+    position: absolute;
+    top: 36%;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    z-index: 2;
+  }
+  .process-step {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: 950;
+    position: relative;
+  }
+  .process-label {
+    font-size: 13px;
+    font-weight: 700;
+    margin-top: 2px;
+    text-align: center;
+    max-width: 220px;
+    line-height: 1.4;
+  }
+  .process-arrow {
+    width: 2px;
+    height: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .particle {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 3;
+  }
+  .pulse-ring {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .glitch-bar {
+    position: absolute;
+    left: 0; right: 0;
+    pointer-events: none;
+    z-index: 6;
+  }
+  .shockwave {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 10px;
+    height: 10px;
+    margin: -5px 0 0 -5px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 4;
+    opacity: 0;
+  }
+  .spark {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 4;
+  }
+  .counter {
+    font-variant-numeric: tabular-nums;
+    font-weight: 950;
+  }
+
+  /* ═══ 引用文献栏 ═══ */
+  .ref-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 6px 10px;
+    z-index: 7;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+    background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);
+  }
+  .ref-chip {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    white-space: nowrap;
+    line-height: 1.4;
+    border: 1px solid;
+  }
+  .ref-chip a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  /* ═══ 场景解说文字 ═══ */
+  .scene-caption {
+    position: absolute;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    font-weight: 600;
+    z-index: 6;
+    text-align: center;
+    width: 86%;
+    line-height: 1.5;
+    padding: 5px 12px;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.35);
+    backdrop-filter: blur(4px);
+  }
+
+  /* 风格变体 */
+  [data-style="dark-neon"] {
+    background: linear-gradient(135deg, #080810 0%, #10101e 50%, #0a0a15 100%);
+    color: #f5f5fa;
+  }
+  [data-style="dark-neon"] .flow-field {
+    background: conic-gradient(from 0deg at 50% 50%,
+      rgba(255,45,85,0.4), rgba(0,212,255,0.3), rgba(255,179,0,0.2), rgba(255,45,85,0.4));
+    opacity: 0.4;
+  }
+  [data-style="dark-neon"] .flow-field-2 {
+    background: radial-gradient(circle at 30% 70%, rgba(255,45,85,0.25), transparent 50%),
+                radial-gradient(circle at 70% 30%, rgba(0,212,255,0.25), transparent 50%);
+  }
+  [data-style="dark-neon"] .orbital-ring { border-color: rgba(255,45,85,0.3); }
+  [data-style="dark-neon"] .orbital-dot { background: #00d4ff; box-shadow: 0 0 10px #00d4ff; }
+  [data-style="dark-neon"] .grid-bg { display: block; }
+  [data-style="dark-neon"] .big-number { color: #f5f5fa; text-shadow: 0 0 40px #ff2d55, 0 0 80px #ff2d55; }
+  [data-style="dark-neon"] .headline { color: #f5f5fa; text-shadow: 0 0 20px #ff2d55; }
+  [data-style="dark-neon"] .subtitle { color: rgba(245,245,250,0.5); }
+  [data-style="dark-neon"] .light-ray { background: linear-gradient(to bottom, transparent, #ff2d55, transparent); }
+  [data-style="dark-neon"] .compare-card { background: rgba(20,20,28,0.8); backdrop-filter: blur(4px); }
+  [data-style="dark-neon"] .compare-card.lose { border: 2px solid #ff2d55; box-shadow: 0 0 20px rgba(255,45,85,0.3), inset 0 0 20px rgba(255,45,85,0.05); }
+  [data-style="dark-neon"] .compare-card.win { border: 2px solid #00d4ff; box-shadow: 0 0 25px rgba(0,212,255,0.4), inset 0 0 20px rgba(0,212,255,0.05); }
+  [data-style="dark-neon"] .compare-card.lose .card-label { color: #ff2d55; }
+  [data-style="dark-neon"] .compare-card.win .card-label { color: #00d4ff; }
+  [data-style="dark-neon"] .compare-card.lose .card-icon { color: #ff2d55; text-shadow: 0 0 20px #ff2d55; }
+  [data-style="dark-neon"] .compare-card.win .card-icon { color: #00d4ff; text-shadow: 0 0 20px #00d4ff; }
+  [data-style="dark-neon"] .flow-step { background: rgba(255,255,255,0.04); border: 1.5px solid rgba(0,212,255,0.25); }
+  [data-style="dark-neon"] .flow-step.active { border-color: #ff2d55; box-shadow: 0 0 20px rgba(255,45,85,0.4), inset 0 0 15px rgba(255,45,85,0.05); }
+  [data-style="dark-neon"] .flow-step .step-num { background: #ff2d55; color: #fff; box-shadow: 0 0 15px #ff2d55; }
+  [data-style="dark-neon"] .flow-step .step-text { color: #f5f5fa; }
+  [data-style="dark-neon"] .energy-line { background: linear-gradient(to bottom, #ff2d55, #00d4ff); }
+  [data-style="dark-neon"] .formula-token { background: rgba(0,212,255,0.1); border: 1.5px solid rgba(0,212,255,0.35); color: #f5f5fa; }
+  [data-style="dark-neon"] .formula-token.highlight { background: rgba(255,179,0,0.15); border-color: #ffb300; color: #ffb300; box-shadow: 0 0 20px rgba(255,179,0,0.3); }
+  [data-style="dark-neon"] .code-card { background: #08080f; border: 1.5px solid rgba(0,212,255,0.25); box-shadow: 0 0 15px rgba(0,212,255,0.15); color: #00ff88; }
+  [data-style="dark-neon"] .scan-line-beam { background: linear-gradient(to bottom, transparent, rgba(0,255,136,0.3), transparent); }
+  [data-style="dark-neon"] .process-step { background: rgba(20,20,28,0.8); border: 2px solid #ff2d55; color: #ff2d55; }
+  [data-style="dark-neon"] .process-step.active { background: #ff2d55; color: #fff; box-shadow: 0 0 25px rgba(255,45,85,0.7); }
+  [data-style="dark-neon"] .process-label { color: #f5f5fa; }
+  [data-style="dark-neon"] .process-arrow { background: linear-gradient(to bottom, #ff2d55, #00d4ff); }
+  [data-style="dark-neon"] .shockwave { border: 2px solid #ff2d55; }
+  [data-style="dark-neon"] .ambient-particle { background: #00d4ff; box-shadow: 0 0 6px #00d4ff; }
+
+  [data-style="cream-editorial"] {
+    background: linear-gradient(135deg, #f4efe4 0%, #fffdf7 50%, #f4efe4 100%);
+    color: #151515;
+  }
+  [data-style="cream-editorial"] .flow-field {
+    background: conic-gradient(from 0deg at 50% 50%,
+      rgba(232,63,50,0.1), rgba(38,92,255,0.08), rgba(232,63,50,0.06), rgba(232,63,50,0.1));
+    opacity: 0.4;
+  }
+  [data-style="cream-editorial"] .flow-field-2 {
+    background: radial-gradient(circle at 30% 70%, rgba(232,63,50,0.08), transparent 50%),
+                radial-gradient(circle at 70% 30%, rgba(38,92,255,0.06), transparent 50%);
+  }
+  [data-style="cream-editorial"] .orbital-ring { border-color: rgba(232,63,50,0.15); }
+  [data-style="cream-editorial"] .orbital-dot { background: #265cff; }
+  [data-style="cream-editorial"] .scan-lines, [data-style="cream-editorial"] .noise-overlay { display: none; }
+  [data-style="cream-editorial"] .grid-bg {
+    background-image: 
+      linear-gradient(rgba(21,21,21,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(21,21,21,0.03) 1px, transparent 1px);
+  }
+  [data-style="cream-editorial"] .big-number { color: #151515; }
+  [data-style="cream-editorial"] .headline { color: #151515; }
+  [data-style="cream-editorial"] .subtitle { color: #817b72; }
+  [data-style="cream-editorial"] .light-ray { background: linear-gradient(to bottom, transparent, #e83f32, transparent); opacity: 0.1; }
+  [data-style="cream-editorial"] .compare-card { background: #fffdf7; }
+  [data-style="cream-editorial"] .compare-card.lose { border: 2px solid #e83f32; }
+  [data-style="cream-editorial"] .compare-card.win { border: 2px solid #265cff; box-shadow: 0 4px 20px rgba(38,92,255,0.15); }
+  [data-style="cream-editorial"] .compare-card.lose .card-label { color: #e83f32; }
+  [data-style="cream-editorial"] .compare-card.win .card-label { color: #265cff; }
+  [data-style="cream-editorial"] .compare-card.lose .card-icon { color: #e83f32; }
+  [data-style="cream-editorial"] .compare-card.win .card-icon { color: #265cff; }
+  [data-style="cream-editorial"] .flow-step { background: #fffdf7; border: 1.5px solid rgba(38,92,255,0.2); }
+  [data-style="cream-editorial"] .flow-step.active { border-color: #e83f32; }
+  [data-style="cream-editorial"] .flow-step .step-num { background: #e83f32; color: #fff; }
+  [data-style="cream-editorial"] .flow-step .step-text { color: #151515; }
+  [data-style="cream-editorial"] .energy-line { background: linear-gradient(to bottom, #e83f32, #265cff); }
+  [data-style="cream-editorial"] .formula-token { background: rgba(38,92,255,0.06); border: 1.5px solid rgba(38,92,255,0.2); color: #151515; }
+  [data-style="cream-editorial"] .formula-token.highlight { background: rgba(232,63,50,0.08); border-color: #e83f32; color: #e83f32; }
+  [data-style="cream-editorial"] .code-card { background: #fffdf7; border: 1.5px solid #151515; color: #151515; }
+  [data-style="cream-editorial"] .scan-line-beam { background: linear-gradient(to bottom, transparent, rgba(38,92,255,0.2), transparent); }
+  [data-style="cream-editorial"] .process-step { background: #fffdf7; border: 2px solid #265cff; color: #265cff; }
+  [data-style="cream-editorial"] .process-step.active { background: #265cff; color: #fff; }
+  [data-style="cream-editorial"] .process-label { color: #151515; }
+  [data-style="cream-editorial"] .process-arrow { background: #265cff; }
+  [data-style="cream-editorial"] .shockwave { border: 2px solid #e83f32; }
+  [data-style="cream-editorial"] .ambient-particle { background: #265cff; opacity: 0.4; }
+
+  [data-style="ref-comparison"] {
+    background: linear-gradient(135deg, #121212 0%, #1a1a1a 50%, #121212 100%);
+    color: #fff;
+  }
+  [data-style="ref-comparison"] .flow-field {
+    background: conic-gradient(from 0deg at 50% 50%,
+      rgba(230,57,70,0.25), rgba(38,92,255,0.2), rgba(230,57,70,0.1), rgba(230,57,70,0.25));
+    opacity: 0.3;
+  }
+  [data-style="ref-comparison"] .flow-field-2 {
+    background: radial-gradient(circle at 30% 70%, rgba(230,57,70,0.2), transparent 50%),
+                radial-gradient(circle at 70% 30%, rgba(38,92,255,0.15), transparent 50%);
+  }
+  [data-style="ref-comparison"] .orbital-ring { border-color: rgba(38,92,255,0.2); }
+  [data-style="ref-comparison"] .orbital-dot { background: #e63946; box-shadow: 0 0 8px #e63946; }
+  [data-style="ref-comparison"] .grid-bg {
+    background-image: 
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  }
+  [data-style="ref-comparison"] .big-number { color: #fff; }
+  [data-style="ref-comparison"] .headline { color: #fff; }
+  [data-style="ref-comparison"] .subtitle { color: #777; }
+  [data-style="ref-comparison"] .light-ray { background: linear-gradient(to bottom, transparent, #e63946, transparent); }
+  [data-style="ref-comparison"] .compare-card { background: #fff8ee; color: #151515; }
+  [data-style="ref-comparison"] .compare-card.lose { border: 3px solid #e63946; }
+  [data-style="ref-comparison"] .compare-card.win { border: 3px solid #265cff; box-shadow: 0 0 20px rgba(38,92,255,0.3); }
+  [data-style="ref-comparison"] .compare-card.lose .card-label { color: #e63946; }
+  [data-style="ref-comparison"] .compare-card.win .card-label { color: #265cff; }
+  [data-style="ref-comparison"] .compare-card.lose .card-icon { color: #e63946; }
+  [data-style="ref-comparison"] .compare-card.win .card-icon { color: #265cff; }
+  [data-style="ref-comparison"] .flow-step { background: #1a1a1a; border: 1.5px solid rgba(38,92,255,0.25); }
+  [data-style="ref-comparison"] .flow-step.active { border-color: #e63946; box-shadow: 0 0 15px rgba(230,57,70,0.3); }
+  [data-style="ref-comparison"] .flow-step .step-num { background: #e63946; color: #fff; }
+  [data-style="ref-comparison"] .flow-step .step-text { color: #fff; }
+  [data-style="ref-comparison"] .energy-line { background: linear-gradient(to bottom, #e63946, #265cff); }
+  [data-style="ref-comparison"] .formula-token { background: rgba(38,92,255,0.08); border: 1.5px solid #265cff; color: #fff; }
+  [data-style="ref-comparison"] .formula-token.highlight { background: rgba(230,57,70,0.1); border-color: #e63946; color: #e63946; }
+  [data-style="ref-comparison"] .code-card { background: #0d0d0d; border: 1.5px solid #265cff; color: #00d4ff; }
+  [data-style="ref-comparison"] .scan-line-beam { background: linear-gradient(to bottom, transparent, rgba(0,212,255,0.3), transparent); }
+  [data-style="ref-comparison"] .process-step { background: #1a1a1a; border: 2px solid #e63946; color: #e63946; }
+  [data-style="ref-comparison"] .process-step.active { background: #265cff; color: #fff; border-color: #265cff; box-shadow: 0 0 20px rgba(38,92,255,0.5); }
+  [data-style="ref-comparison"] .process-label { color: #fff; }
+  [data-style="ref-comparison"] .process-arrow { background: #e63946; }
+  [data-style="ref-comparison"] .shockwave { border: 2px solid #265cff; }
+  [data-style="ref-comparison"] .ambient-particle { background: #e63946; box-shadow: 0 0 6px #e63946; }
+
+  [data-style="tech-glow"] {
+    background: linear-gradient(135deg, #0a1628 0%, #152238 50%, #0a1628 100%);
+    color: #e0e0e0;
+  }
+  [data-style="tech-glow"] .flow-field {
+    background: conic-gradient(from 0deg at 50% 50%,
+      rgba(0,255,136,0.3), rgba(0,212,255,0.25), rgba(255,107,107,0.15), rgba(0,255,136,0.3));
+    opacity: 0.35;
+  }
+  [data-style="tech-glow"] .flow-field-2 {
+    background: radial-gradient(circle at 30% 70%, rgba(0,255,136,0.2), transparent 50%),
+                radial-gradient(circle at 70% 30%, rgba(0,212,255,0.18), transparent 50%);
+  }
+  [data-style="tech-glow"] .orbital-ring { border-color: rgba(0,255,136,0.25); }
+  [data-style="tech-glow"] .orbital-dot { background: #00d4ff; box-shadow: 0 0 10px #00d4ff; }
+  [data-style="tech-glow"] .grid-bg {
+    background-image: 
+      linear-gradient(rgba(0,255,136,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.04) 1px, transparent 1px);
+  }
+  [data-style="tech-glow"] .big-number { color: #00ff88; text-shadow: 0 0 40px #00ff88, 0 0 80px #00ff88; }
+  [data-style="tech-glow"] .headline { color: #00ff88; text-shadow: 0 0 20px #00ff88; }
+  [data-style="tech-glow"] .subtitle { color: #6b7280; }
+  [data-style="tech-glow"] .light-ray { background: linear-gradient(to bottom, transparent, #00ff88, transparent); }
+  [data-style="tech-glow"] .compare-card { background: rgba(10,22,40,0.8); backdrop-filter: blur(4px); }
+  [data-style="tech-glow"] .compare-card.lose { border: 2px solid #ff6b6b; box-shadow: 0 0 20px rgba(255,107,107,0.3); }
+  [data-style="tech-glow"] .compare-card.win { border: 2px solid #00ff88; box-shadow: 0 0 25px rgba(0,255,136,0.4), inset 0 0 20px rgba(0,255,136,0.05); }
+  [data-style="tech-glow"] .compare-card.lose .card-label { color: #ff6b6b; }
+  [data-style="tech-glow"] .compare-card.win .card-label { color: #00ff88; }
+  [data-style="tech-glow"] .compare-card.lose .card-icon { color: #ff6b6b; }
+  [data-style="tech-glow"] .compare-card.win .card-icon { color: #00ff88; text-shadow: 0 0 20px #00ff88; }
+  [data-style="tech-glow"] .flow-step { background: rgba(0,255,136,0.04); border: 1.5px solid rgba(0,255,136,0.25); }
+  [data-style="tech-glow"] .flow-step.active { border-color: #00d4ff; box-shadow: 0 0 20px rgba(0,212,255,0.4), inset 0 0 15px rgba(0,212,255,0.05); }
+  [data-style="tech-glow"] .flow-step .step-num { background: #00ff88; color: #0a1628; box-shadow: 0 0 15px #00ff88; }
+  [data-style="tech-glow"] .flow-step .step-text { color: #e0e0e0; }
+  [data-style="tech-glow"] .energy-line { background: linear-gradient(to bottom, #00ff88, #00d4ff); }
+  [data-style="tech-glow"] .formula-token { background: rgba(0,255,136,0.08); border: 1.5px solid rgba(0,255,136,0.3); color: #00ff88; }
+  [data-style="tech-glow"] .formula-token.highlight { background: rgba(0,212,255,0.12); border-color: #00d4ff; color: #00d4ff; box-shadow: 0 0 20px rgba(0,212,255,0.3); }
+  [data-style="tech-glow"] .code-card { background: #06121f; border: 1.5px solid rgba(0,255,136,0.25); box-shadow: 0 0 15px rgba(0,255,136,0.15); color: #00ff88; }
+  [data-style="tech-glow"] .scan-line-beam { background: linear-gradient(to bottom, transparent, rgba(0,255,136,0.4), transparent); }
+  [data-style="tech-glow"] .process-step { background: rgba(0,255,136,0.04); border: 2px solid #00d4ff; color: #00d4ff; }
+  [data-style="tech-glow"] .process-step.active { background: #00ff88; color: #0a1628; box-shadow: 0 0 25px rgba(0,255,136,0.7); border-color: #00ff88; }
+  [data-style="tech-glow"] .process-label { color: #e0e0e0; }
+  [data-style="tech-glow"] .process-arrow { background: linear-gradient(to bottom, #00ff88, #00d4ff); }
+  [data-style="tech-glow"] .shockwave { border: 2px solid #00ff88; }
+  [data-style="tech-glow"] .ambient-particle { background: #00ff88; box-shadow: 0 0 6px #00ff88; }
+
+  /* ═══ premium-cinematic 电影级风格 ═══ */
+  [data-style="premium"] {
+    background: radial-gradient(ellipse at 50% 30%, #12102a 0%, #0a0818 50%, #060410 100%);
+    color: #e2e8f0;
+  }
+  [data-style="premium"] .flow-field {
+    background: conic-gradient(from 0deg at 50% 50%,
+      rgba(99,102,241,0.18), rgba(168,85,247,0.15), rgba(34,211,238,0.10), rgba(99,102,241,0.18));
+    opacity: 0.5;
+    filter: blur(100px);
+  }
+  [data-style="premium"] .flow-field-2 {
+    background: radial-gradient(circle at 30% 60%, rgba(99,102,241,0.15), transparent 50%),
+                radial-gradient(circle at 70% 40%, rgba(168,85,247,0.12), transparent 50%);
+    filter: blur(120px);
+  }
+  [data-style="premium"] .orbital-ring { border-color: rgba(99,102,241,0.12); }
+  [data-style="premium"] .orbital-dot { background: #818cf8; box-shadow: 0 0 8px rgba(129,140,248,0.6); }
+  [data-style="premium"] .grid-bg {
+    background-image:
+      linear-gradient(rgba(99,102,241,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(99,102,241,0.025) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  [data-style="premium"] .grid-bg-far {
+    background-image:
+      linear-gradient(rgba(168,85,247,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(168,85,247,0.015) 1px, transparent 1px);
+    background-size: 80px 80px;
+  }
+  [data-style="premium"] .big-number {
+    color: #c4b5fd;
+    text-shadow: 0 0 30px rgba(139,92,246,0.4), 0 0 60px rgba(99,102,241,0.2);
+  }
+  [data-style="premium"] .headline {
+    color: #e2e8f0;
+    text-shadow: 0 0 20px rgba(99,102,241,0.3);
+  }
+  [data-style="premium"] .subtitle { color: rgba(196,181,253,0.7); }
+  [data-style="premium"] .light-ray {
+    background: linear-gradient(to bottom, transparent, rgba(99,102,241,0.3), transparent);
+    opacity: 0.12;
+  }
+  [data-style="premium"] .compare-card {
+    background: rgba(15,12,35,0.7);
+    backdrop-filter: blur(8px);
+    border-radius: 14px;
+  }
+  [data-style="premium"] .compare-card.lose {
+    border: 1.5px solid rgba(168,85,247,0.3);
+    box-shadow: 0 0 20px rgba(168,85,247,0.1), inset 0 0 20px rgba(168,85,247,0.03);
+  }
+  [data-style="premium"] .compare-card.win {
+    border: 1.5px solid rgba(99,102,241,0.5);
+    box-shadow: 0 0 30px rgba(99,102,241,0.2), inset 0 0 20px rgba(99,102,241,0.05);
+  }
+  [data-style="premium"] .compare-card.lose .card-label { color: #c084fc; }
+  [data-style="premium"] .compare-card.win .card-label { color: #818cf8; }
+  [data-style="premium"] .compare-card.lose .card-icon { color: #c084fc; text-shadow: 0 0 15px rgba(192,132,252,0.4); }
+  [data-style="premium"] .compare-card.win .card-icon { color: #818cf8; text-shadow: 0 0 15px rgba(129,140,248,0.5); }
+  [data-style="premium"] .flow-step {
+    background: rgba(15,12,35,0.6);
+    border: 1px solid rgba(99,102,241,0.2);
+    backdrop-filter: blur(6px);
+    border-radius: 12px;
+  }
+  [data-style="premium"] .flow-step.active {
+    border-color: rgba(99,102,241,0.5);
+    box-shadow: 0 0 20px rgba(99,102,241,0.2), inset 0 0 15px rgba(99,102,241,0.05);
+  }
+  [data-style="premium"] .flow-step .step-num {
+    background: linear-gradient(135deg, #6366f1, #818cf8);
+    color: #fff;
+    box-shadow: 0 0 12px rgba(99,102,241,0.4);
+    border-radius: 50%;
+  }
+  [data-style="premium"] .flow-step .step-text { color: #e2e8f0; }
+  [data-style="premium"] .energy-line {
+    background: linear-gradient(to bottom, rgba(99,102,241,0.6), rgba(168,85,247,0.4));
+    box-shadow: 0 0 8px rgba(99,102,241,0.3);
+  }
+  [data-style="premium"] .formula-token {
+    background: rgba(99,102,241,0.08);
+    border: 1px solid rgba(99,102,241,0.25);
+    color: #c4b5fd;
+    border-radius: 12px;
+    backdrop-filter: blur(4px);
+  }
+  [data-style="premium"] .formula-token.highlight {
+    background: rgba(168,85,247,0.12);
+    border-color: rgba(168,85,247,0.4);
+    color: #d8b4fe;
+    box-shadow: 0 0 25px rgba(168,85,247,0.2);
+  }
+  [data-style="premium"] .code-card {
+    background: rgba(8,6,20,0.8);
+    border: 1px solid rgba(99,102,241,0.2);
+    box-shadow: 0 0 20px rgba(99,102,241,0.1);
+    color: #a5b4fc;
+    backdrop-filter: blur(6px);
+    border-radius: 12px;
+  }
+  [data-style="premium"] .scan-line-beam {
+    background: linear-gradient(to bottom, transparent, rgba(99,102,241,0.25), transparent);
+  }
+  [data-style="premium"] .process-step {
+    background: rgba(15,12,35,0.7);
+    border: 1.5px solid rgba(99,102,241,0.3);
+    color: #818cf8;
+    backdrop-filter: blur(6px);
+    border-radius: 14px;
+  }
+  [data-style="premium"] .process-step.active {
+    background: linear-gradient(135deg, rgba(99,102,241,0.3), rgba(168,85,247,0.2));
+    color: #fff;
+    border-color: rgba(129,140,248,0.6);
+    box-shadow: 0 0 25px rgba(99,102,241,0.3);
+  }
+  [data-style="premium"] .process-label { color: #e2e8f0; }
+  [data-style="premium"] .process-arrow {
+    background: linear-gradient(to bottom, rgba(99,102,241,0.5), rgba(168,85,247,0.3));
+  }
+  [data-style="premium"] .shockwave { border: 1px solid rgba(99,102,241,0.4); }
+  [data-style="premium"] .ambient-particle {
+    background: #818cf8;
+    box-shadow: 0 0 6px rgba(129,140,248,0.5);
+  }
+  [data-style="premium"] .ref-chip {
+    border-color: rgba(99,102,241,0.35);
+    color: #a5b4fc;
+    background: rgba(99,102,241,0.08);
+  }
+  [data-style="premium"] .scene-caption {
+    color: #e2e8f0;
+    background: rgba(10,8,24,0.5);
+  }
+  [data-style="premium"] .vignette {
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(6,4,16,0.6) 100%);
+  }
+
+  /* ═══ 连接路径 ═══ */
+  .connect-line {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    background: linear-gradient(to bottom, rgba(99,102,241,0.6), rgba(168,85,247,0.3));
+    transform-origin: top center;
+    z-index: 1;
+    opacity: 0;
+    border-radius: 2px;
+  }
+  /* ═══ 节点光晕 ═══ */
+  .node-glow {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    filter: blur(20px);
+  }
+  [data-style="dark-neon"] .ref-chip { border-color: rgba(255,45,85,0.4); color: #ff6b8a; background: rgba(255,45,85,0.08); }
+  [data-style="dark-neon"] .scene-caption { color: #e0e0e0; }
+  [data-style="cream-editorial"] .ref-chip { border-color: rgba(38,92,255,0.3); color: #265cff; background: rgba(38,92,255,0.06); }
+  [data-style="cream-editorial"] .scene-caption { color: #2a2a2a; background: rgba(255,255,255,0.5); }
+  [data-style="ref-comparison"] .ref-chip { border-color: rgba(38,92,255,0.35); color: #5a8aff; background: rgba(38,92,255,0.08); }
+  [data-style="ref-comparison"] .scene-caption { color: #f0f0f0; }
+  [data-style="tech-glow"] .ref-chip { border-color: rgba(0,255,136,0.35); color: #00ff88; background: rgba(0,255,136,0.08); }
+  [data-style="tech-glow"] .scene-caption { color: #c0ffd0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>BERT双任务 · MLM + NSP · 7月15日</h1>
+  <p>HyperFrames 动效预览 · 点击预览区重播 · 切换风格标签对比 · 底部保存</p>
+</header>
+
+<div class="toolbar">
+  <button id="play-all">▶ 全部重播</button>
+  <button class="apply-style" data-style="dark-neon">全部：暗黑霓虹</button>
+  <button class="apply-style" data-style="cream-editorial">全部：米色编辑</button>
+  <button class="apply-style" data-style="ref-comparison">全部：红蓝对比</button>
+  <button class="apply-style" data-style="tech-glow">全部：科技流光</button>
+  <button class="apply-style" data-style="premium">全部：电影级</button>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="save-bar">
+  <button class="save-btn" id="save-btn">💾 保存选择并渲染</button>
+</div>
+
+<script>
+const STYLES = ["premium", "dark-neon", "cream-editorial", "ref-comparison", "tech-glow"];
+const STYLE_NAMES = {
+  "premium": "电影级",
+  "dark-neon": "暗黑霓虹",
+  "cream-editorial": "米色编辑",
+  "ref-comparison": "红蓝对比",
+  "tech-glow": "科技流光",
+};
+
+const SOURCES = {
+  S1: { tag: "Devlin et al., 2018", title: "BERT: Pre-training of Deep Bidirectional Transformers", url: "https://arxiv.org/abs/1810.04805" },
+  S2: { tag: "Liu et al., 2019", title: "Does BERT Hate Punctuation? NSP analysis", url: "https://arxiv.org/abs/1908.04822" },
+  S3: { tag: "Liu et al., 2019", title: "RoBERTa: A Robustly Optimized BERT Pretraining", url: "https://arxiv.org/abs/1907.11692" },
+  S4: { tag: "Jay Alammar", title: "The Illustrated BERT", url: "https://jalammar.github.io/illustrated-bert/" },
+};
+
+const SCENES = [
+  {
+    id: "hook",
+    title: "S1 · 开场钩子",
+    label: "MLM + NSP 双任务",
+    caption: "别只说名字，要讲清两个任务分别学什么能力",
+    refs: ["S1", "S4"],
+    visualType: "comparison",
+    data: {
+      left: "MLM\n词级表示",
+      right: "NSP\n句间关系",
+      winner: "right",
+      bigNum: "BERT",
+      subtitle: "两个任务，两种能力"
+    }
+  },
+  {
+    id: "mlm",
+    title: "S2 · MLM机制",
+    label: "遮15%猜token",
+    caption: "从两边猜中间，逼出双向编码——BERT与GPT的核心区别",
+    refs: ["S1", "S4"],
+    visualType: "flow",
+    data: {
+      steps: ["随机mask 15%的token", "80% 替换成[MASK]", "10% 替换成随机词", "10% 保持不变", "预测被mask的原始token"],
+      subtitle: "从两边猜中间，逼出双向编码"
+    }
+  },
+  {
+    id: "why801010",
+    title: "S3 · 80-10-10策略",
+    label: "为什么不是全遮？",
+    caption: "全是[MASK]会导致微调时分布不匹配，混合策略提升鲁棒性",
+    refs: ["S1", "S3"],
+    visualType: "formula",
+    data: {
+      tokens: ["80% → [MASK]", "10% → 随机词", "10% → 保持不变", "目的：提升泛化鲁棒性"],
+      subtitle: "缓解微调阶段分布不匹配"
+    }
+  },
+  {
+    id: "nsp",
+    title: "S4 · NSP机制",
+    label: "下一句预测",
+    caption: "50%真下一句 + 50%随机句，用[CLS]做二分类判断",
+    refs: ["S1", "S2"],
+    visualType: "process",
+    data: {
+      steps: ["[CLS] + A [SEP] B", "50% B是A下一句", "50% B是随机句", "[CLS] 二分类判断"],
+      subtitle: "学习句子之间的关系"
+    }
+  },
+  {
+    id: "controversy",
+    title: "S5 · NSP争议",
+    label: "NSP vs SOP",
+    caption: "RoBERTa发现去掉NSP效果更好，ALBERT改用句子顺序预测",
+    refs: ["S2", "S3"],
+    visualType: "comparison",
+    data: {
+      left: "NSP\n简单·主题投机",
+      right: "SOP\n更难·学语序",
+      winner: "right",
+      bigNum: "RoBERTa",
+      subtitle: "ALBERT改用句子顺序预测"
+    }
+  },
+  {
+    id: "answer",
+    title: "S6 · 高分框架",
+    label: "完整回答链路",
+    caption: "四步说清BERT预训练：MLM→80-10-10→NSP→争议与改进",
+    refs: ["S1", "S2", "S3", "S4"],
+    visualType: "code",
+    data: {
+      code: [
+        "MLM: mask 15% → 预测 → 双向表示",
+        "80-10-10: 缓解分布不匹配 → 鲁棒",
+        "NSP: 句对二分类 → 句间关系",
+        "争议: RoBERTa移除, ALBERT用SOP"
+      ],
+      subtitle: "四步说清BERT预训练"
+    }
+  },
+];
+
+const choices = {
+  hook: "premium",
+  mlm: "premium",
+  why801010: "premium",
+  nsp: "premium",
+  controversy: "premium",
+  answer: "premium",
+};
+
+const grid = document.getElementById("grid");
+
+SCENES.forEach((scene) => {
+  const card = document.createElement("div");
+  card.className = "scene-card";
+  card.innerHTML = `
+    <div class="scene-header">
+      <div>
+        <div class="label">${scene.title}</div>
+        <div class="title">${scene.label}</div>
+      </div>
+      <div class="style-tabs" data-scene="${scene.id}">
+        ${STYLES.map(s => `<button class="style-tab ${s === choices[scene.id] ? 'active' : ''}" data-style="${s}">${STYLE_NAMES[s]}</button>`).join('')}
+      </div>
+    </div>
+    <div class="preview-frame" id="preview-${scene.id}" data-style="${choices[scene.id]}" data-scene="${scene.id}"></div>
+    <div class="scene-footer">
+      <button class="replay" data-scene="${scene.id}">↻ 重播</button>
+      <span class="selected-style" id="selected-${scene.id}">${STYLE_NAMES[choices[scene.id]]}</span>
+    </div>
+  `;
+  grid.appendChild(card);
+});
+
+function getAccentColor(style, variant) {
+  const map = {
+    "premium": { primary: "#6366f1", secondary: "#818cf8", accent: "#c084fc", success: "#22d3ee" },
+    "dark-neon": { primary: "#ff2d55", secondary: "#00d4ff", accent: "#ffb300", success: "#00ff88" },
+    "cream-editorial": { primary: "#e83f32", secondary: "#265cff", accent: "#d4a574", success: "#265cff" },
+    "ref-comparison": { primary: "#e63946", secondary: "#265cff", accent: "#ffb703", success: "#265cff" },
+    "tech-glow": { primary: "#00ff88", secondary: "#00d4ff", accent: "#ff6b6b", success: "#00ff88" },
+  };
+  return map[style][variant] || map[style].primary;
+}
+
+function spawnAmbientParticles(container, sceneId, style, count) {
+  const prefix = `#preview-${sceneId}`;
+  const color = getAccentColor(style, "secondary");
+  for (let i = 0; i < count; i++) {
+    const p = document.createElement("div");
+    p.className = "ambient-particle";
+    p.id = `amb-${sceneId}-${i}`;
+    container.appendChild(p);
+    const size = 1.5 + Math.random() * 2.5;
+    const startX = Math.random() * 100;
+    const startY = 60 + Math.random() * 40;
+    const drift = (Math.random() - 0.5) * 60;
+    gsap.set(p, {
+      left: startX + "%",
+      top: startY + "%",
+      width: size,
+      height: size,
+      opacity: 0,
+      backgroundColor: color,
+      boxShadow: `0 0 ${size * 2}px ${color}`,
+    });
+    gsap.to(p, {
+      y: "-=80",
+      x: "+=" + drift,
+      opacity: 0.6,
+      duration: 2 + Math.random() * 2,
+      ease: "power1.out",
+      delay: Math.random() * 2,
+      repeat: 6,
+      repeatDelay: 0.5,
+    });
+    gsap.to(p, {
+      opacity: 0,
+      duration: 1,
+      ease: "power1.in",
+      delay: 1 + Math.random() * 2,
+      repeat: 6,
+      repeatDelay: 1.5,
+    });
+  }
+}
+
+function spawnSparks(container, sceneId, style, count, centerX, centerY) {
+  const color = getAccentColor(style, "accent");
+  for (let i = 0; i < count; i++) {
+    const s = document.createElement("div");
+    s.className = "spark";
+    s.id = `spk-${sceneId}-${i}`;
+    container.appendChild(s);
+    const angle = (i / count) * Math.PI * 2 + Math.random() * 0.5;
+    const dist = 30 + Math.random() * 60;
+    const endX = Math.cos(angle) * dist;
+    const endY = Math.sin(angle) * dist;
+    gsap.set(s, {
+      left: centerX,
+      top: centerY,
+      width: 2 + Math.random() * 3,
+      height: 2 + Math.random() * 3,
+      backgroundColor: color,
+      boxShadow: `0 0 6px ${color}`,
+      xPercent: -50,
+      yPercent: -50,
+    });
+    gsap.fromTo(s,
+      { scale: 0, opacity: 0 },
+      { scale: 1, opacity: 0.9, duration: 0.15, ease: "power2.out", delay: 0.02 * i }
+    );
+    gsap.to(s, {
+      x: endX + "px",
+      y: endY + "px",
+      opacity: 0,
+      duration: 0.6 + Math.random() * 0.4,
+      ease: "power2.out",
+      delay: 0.02 * i,
+    });
+  }
+}
+
+function renderPreview(sceneId, style) {
+  const scene = SCENES.find(s => s.id === sceneId);
+  const frame = document.getElementById(`preview-${sceneId}`);
+  frame.dataset.style = style;
+  frame.dataset.scene = sceneId;
+
+  let content = `
+    <div class="preview-content">
+    <div class="flow-field"></div>
+    <div class="flow-field-2"></div>
+    <div class="grid-bg-far"></div>
+    <div class="grid-bg"></div>
+    <div class="noise-overlay"></div>
+    <div class="scan-lines"></div>
+    <div class="vignette"></div>
+  `;
+
+  for (let r = 0; r < 2; r++) {
+    content += `<div class="orbital-ring" id="oring-${sceneId}-${r}"></div>`;
+    content += `<div class="orbital-dot" id="odot-${sceneId}-${r}"></div>`;
+  }
+
+  for (let r = 0; r < 3; r++) {
+    content += `<div class="light-ray" id="ray-${sceneId}-${r}"></div>`;
+  }
+
+  if (style === "dark-neon") {
+    content += `<div class="glitch-bar" id="glitch-${sceneId}"></div>`;
+  }
+
+  content += `<div class="shockwave" id="shock-${sceneId}"></div>`;
+
+  // 节点光晕层（premium风格用）
+  if (style === "premium") {
+    for (let i = 0; i < 6; i++) {
+      content += `<div class="node-glow" id="nglow-${sceneId}-${i}"></div>`;
+    }
+    for (let i = 0; i < 5; i++) {
+      content += `<div class="connect-line" id="cline-${sceneId}-${i}"></div>`;
+    }
+  }
+
+  if (scene.visualType === "comparison") {
+    const d = scene.data;
+    content += `
+      <div class="headline shimmer-text" id="head-${sceneId}">${d.bigNum}</div>
+      <div class="subtitle" id="sub-${sceneId}">${d.subtitle}</div>
+      <div class="compare-cards">
+        <div class="compare-card lose" id="card-l-${sceneId}">
+          <div class="card-label">${d.left.replace(/\n/g, '<br>')}</div>
+          <div class="card-icon">✕</div>
+        </div>
+        <div class="compare-card win" id="card-r-${sceneId}">
+          <div class="card-label">${d.right.replace(/\n/g, '<br>')}</div>
+          <div class="card-icon">✓</div>
+        </div>
+      </div>
+    `;
+    for (let i = 0; i < 20; i++) {
+      content += `<div class="particle" id="p-${sceneId}-${i}"></div>`;
+    }
+    for (let i = 0; i < 3; i++) {
+      content += `<div class="pulse-ring" id="pr-${sceneId}-${i}"></div>`;
+    }
+  } else if (scene.visualType === "flow") {
+    const d = scene.data;
+    content += `<div class="subtitle shimmer-text" id="sub-${sceneId}">${d.subtitle}</div>`;
+    content += `<div class="energy-line" id="eline-${sceneId}"></div>`;
+    content += `<div class="flow-steps">`;
+    d.steps.forEach((step, i) => {
+      content += `<div class="flow-step" id="step-${sceneId}-${i}"><div class="step-num">${i+1}</div><div class="step-text">${step}</div></div>`;
+    });
+    content += `</div>`;
+    for (let i = 0; i < 8; i++) {
+      content += `<div class="particle" id="fp-${sceneId}-${i}"></div>`;
+    }
+  } else if (scene.visualType === "formula") {
+    const d = scene.data;
+    content += `<div class="subtitle shimmer-text" id="sub-${sceneId}">${d.subtitle}</div>`;
+    content += `<div class="formula-row">`;
+    d.tokens.forEach((token, i) => {
+      const isHighlight = i === d.tokens.length - 1;
+      content += `<div class="formula-token ${isHighlight ? 'highlight' : ''}" id="tok-${sceneId}-${i}">${token}</div>`;
+    });
+    content += `</div>`;
+    for (let i = 0; i < 12; i++) {
+      content += `<div class="particle" id="tp-${sceneId}-${i}"></div>`;
+    }
+  } else if (scene.visualType === "code") {
+    const d = scene.data;
+    content += `<div class="subtitle shimmer-text" id="sub-${sceneId}">${d.subtitle}</div>`;
+    content += `<div class="scan-line-beam" id="scanbeam-${sceneId}"></div>`;
+    content += `<div class="code-card" id="code-${sceneId}">`;
+    d.code.forEach((line, i) => {
+      content += `<div class="code-line" id="code-line-${sceneId}-${i}">${line}</div>`;
+    });
+    content += `<span class="cursor-block" id="cursor-${sceneId}"></span></div>`;
+  } else if (scene.visualType === "process") {
+    const d = scene.data;
+    content += `<div class="subtitle shimmer-text" id="sub-${sceneId}">${d.subtitle}</div>`;
+    content += `<div class="process-steps">`;
+    d.steps.forEach((step, i) => {
+      content += `<div class="process-step" id="pstep-${sceneId}-${i}"><span class="counter" id="pcount-${sceneId}-${i}">${i+1}</span></div>`;
+      content += `<div class="process-label" id="plabel-${sceneId}-${i}">${step}</div>`;
+      if (i < d.steps.length - 1) {
+        content += `<div class="process-arrow" id="parrow-${sceneId}-${i}"></div>`;
+      }
+    });
+    content += `</div>`;
+    for (let i = 0; i < 15; i++) {
+      content += `<div class="particle" id="pp-${sceneId}-${i}"></div>`;
+    }
+  }
+
+  // 场景解说文字
+  if (scene.caption) {
+    content += `<div class="scene-caption" id="caption-${sceneId}">${scene.caption}</div>`;
+  }
+
+  // 引用文献栏
+  if (scene.refs && scene.refs.length) {
+    content += `<div class="ref-bar" id="refbar-${sceneId}">`;
+    content += `<span style="font-size:9px;opacity:0.5;font-weight:600;">引用</span>`;
+    scene.refs.forEach(refId => {
+      const src = SOURCES[refId];
+      if (src) {
+        content += `<span class="ref-chip" title="${src.title}"><a href="${src.url}" target="_blank">${refId} · ${src.tag}</a></span>`;
+      }
+    });
+    content += `</div>`;
+  }
+
+  content += `</div>`;
+  frame.innerHTML = content;
+  playAnimation(sceneId, style);
+}
+
+function playAnimation(sceneId, style) {
+  const scene = SCENES.find(s => s.id === sceneId);
+  const prefix = `#preview-${sceneId}`;
+  const container = document.querySelector(`${prefix} .preview-content`);
+
+  gsap.killTweensOf(`${prefix} *`);
+  gsap.killTweensOf(container);
+
+  // ═══ 镜头缓慢推近 ═══
+  gsap.fromTo(container,
+    { scale: 0.94, opacity: 0.6 },
+    { scale: 1, opacity: 1, duration: 2.5, ease: "power2.inOut" }
+  );
+
+  // ═══ FlowField - 极慢旋转 + 呼吸 ═══
+  const ff = document.querySelector(`${prefix} .flow-field`);
+  if (ff) {
+    gsap.fromTo(ff,
+      { rotation: -20, scale: 0.8, opacity: 0 },
+      { rotation: 0, scale: 1, opacity: 1, duration: 2, ease: "power2.inOut" }
+    );
+    gsap.to(ff, { rotation: "+=360", duration: 40, ease: "none", repeat: 3, delay: 1.5 });
+    gsap.to(ff, { scale: 1.08, duration: 5, ease: "sine.inOut", yoyo: true, repeat: 4, delay: 1.5 });
+  }
+
+  // FlowField 2 - 反向极慢旋转
+  const ff2 = document.querySelector(`${prefix} .flow-field-2`);
+  if (ff2) {
+    gsap.fromTo(ff2, { rotation: 20, opacity: 0 }, { rotation: 0, opacity: 0.6, duration: 2.5, ease: "power2.inOut", delay: 0.3 });
+    gsap.to(ff2, { rotation: "-=360", duration: 60, ease: "none", repeat: 3, delay: 1.5 });
+    gsap.to(ff2, { scale: 0.95, duration: 6, ease: "sine.inOut", yoyo: true, repeat: 3, delay: 0.8 });
+  }
+
+  // ═══ 网格背景 - 极慢视差 ═══
+  const gridBg = document.querySelector(`${prefix} .grid-bg`);
+  const gridBgFar = document.querySelector(`${prefix} .grid-bg-far`);
+  if (gridBg) {
+    gsap.fromTo(gridBg, { opacity: 0 }, { opacity: 1, duration: 1.5, ease: "power2.inOut", delay: 0.3 });
+    gsap.to(gridBg, { backgroundPosition: "40px 40px", duration: 30, ease: "none", repeat: 3 });
+  }
+  if (gridBgFar) {
+    gsap.fromTo(gridBgFar, { opacity: 0 }, { opacity: 1, duration: 2, ease: "power2.inOut", delay: 0.2 });
+    gsap.to(gridBgFar, { backgroundPosition: "-80px -80px", duration: 60, ease: "none", repeat: 3 });
+  }
+
+  // ═══ 轨道环 - 极慢旋转 + 柔和淡入 ═══
+  const ringColors = {
+    "premium": ["#6366f1", "#a855f7"],
+    "dark-neon": ["#ff2d55", "#00d4ff"],
+    "cream-editorial": ["#e83f32", "#265cff"],
+    "ref-comparison": ["#e63946", "#265cff"],
+    "tech-glow": ["#00ff88", "#00d4ff"],
+  };
+  for (let r = 0; r < 2; r++) {
+    const ring = document.querySelector(`#oring-${sceneId}-${r}`);
+    const dot = document.querySelector(`#odot-${sceneId}-${r}`);
+    const rx = r === 0 ? 90 : 130;
+    const ry = r === 0 ? 28 : 40;
+    const color = ringColors[style][r % 2];
+    if (ring) {
+      gsap.set(ring, {
+        left: "50%", top: "50%",
+        width: rx * 2, height: ry * 2,
+        xPercent: -50, yPercent: -50,
+        borderColor: color + "22",
+        borderRadius: "50%",
+        opacity: 0,
+      });
+      gsap.to(ring, { opacity: r === 0 ? 0.2 : 0.15, duration: 2, ease: "power2.inOut", delay: 0.5 + r * 0.3 });
+      gsap.to(ring, { rotation: 360, duration: r === 0 ? 35 : 50, ease: "none", repeat: 3, delay: 1, transformOrigin: "center center" });
+    }
+    if (dot) {
+      gsap.set(dot, {
+        left: "50%", top: "50%",
+        xPercent: -50, yPercent: -50,
+        backgroundColor: color,
+        boxShadow: `0 0 6px ${color}80`,
+        opacity: 0,
+      });
+      gsap.to(dot, { opacity: 0.6, duration: 0.8, ease: "power2.inOut", delay: 0.8 + r * 0.3 });
+      const dur = r === 0 ? 35 : 50;
+      const angleProxy = { angle: 0 };
+      gsap.to(angleProxy, {
+        angle: Math.PI * 2,
+        duration: dur,
+        ease: "none",
+        repeat: 3,
+        delay: 0.8 + r * 0.3,
+        onUpdate: function() {
+          const a = angleProxy.angle + r * 1.2;
+          gsap.set(dot, {
+            x: Math.cos(a) * rx,
+            y: Math.sin(a) * ry,
+            scale: 0.5 + (Math.sin(a) + 1) * 0.35,
+          });
+        }
+      });
+    }
+  }
+
+  // ═══ 光线 - 柔和淡入 + 缓慢漂浮 ═══
+  for (let r = 0; r < 3; r++) {
+    const ray = document.querySelector(`#ray-${sceneId}-${r}`);
+    if (ray) {
+      gsap.set(ray, {
+        left: 15 + r * 30 + "%",
+        rotation: -15 + r * 5,
+        opacity: 0,
+      });
+      gsap.to(ray, {
+        opacity: style === "cream-editorial" ? 0.05 : style === "premium" ? 0.10 : 0.12,
+        duration: 2,
+        ease: "power2.inOut",
+        delay: 0.8 + r * 0.2,
+      });
+      gsap.to(ray, {
+        y: "+=20",
+        x: "+=8",
+        duration: 6 + r,
+        ease: "sine.inOut",
+        yoyo: true,
+        repeat: 3,
+        delay: 1 + r * 0.3,
+      });
+    }
+  }
+
+  // ═══ 震屏冲击波 - premium改为柔和光圈扩散 ═══
+  const shock = document.querySelector(`#shock-${sceneId}`);
+  if (shock) {
+    gsap.set(shock, { left: "50%", top: "45%" });
+    if (style === "premium") {
+      // 柔和光圈扩散
+      const shockTl = gsap.timeline({ repeat: 1, repeatDelay: 3, delay: 0.8 });
+      shockTl.fromTo(shock,
+        { scale: 0, opacity: 0.4, borderWidth: 1 },
+        { scale: 20, opacity: 0, borderWidth: 0.5, duration: 2.5, ease: "power2.out" }
+      );
+    } else {
+      const shockTl = gsap.timeline({ repeat: 2, repeatDelay: 2, delay: 0.3 });
+      shockTl.fromTo(shock,
+        { scale: 0, opacity: 0.8, borderWidth: 3 },
+        { scale: 15, opacity: 0, borderWidth: 1, duration: 0.8, ease: "power2.out" }
+      );
+    }
+  }
+
+  // ═══ 环境粒子 - 柔和上浮 ═══
+  spawnAmbientParticles(container, sceneId, style, 10);
+
+  // ═══ premium: 移除震屏，改为轻微景深呼吸 ═══
+  if (style !== "premium") {
+    gsap.fromTo(container, { x: 0, y: 0 }, {
+      x: "random(-3, 3)",
+      y: "random(-2, 2)",
+      duration: 0.05,
+      repeat: 8,
+      yoyo: true,
+      ease: "none",
+      delay: 0.3,
+    });
+  }
+
+  if (scene.visualType === "comparison") {
+    const head = document.querySelector(`#head-${sceneId}`);
+    const sub = document.querySelector(`#sub-${sceneId}`);
+    const cardL = document.querySelector(`#card-l-${sceneId}`);
+    const cardR = document.querySelector(`#card-r-${sceneId}`);
+    const winColor = getAccentColor(style, "secondary");
+
+    // ═══ 大标题 - 柔和缩放淡入 + 持续呼吸 + shimmer ═══
+    if (head) {
+      gsap.fromTo(head,
+        { scale: 0.85, opacity: 0, y: -15 },
+        { scale: 1, opacity: 1, y: 0, duration: 1.5, ease: "power3.inOut", delay: 0.4 }
+      );
+      // shimmer流光 - 缓慢
+      gsap.to(head, { backgroundPosition: "-200% 0%", duration: 4, ease: "sine.inOut", repeat: 3, delay: 1.5 });
+      // 持续呼吸浮动 - 极轻微
+      gsap.to(head, { y: "+=4", duration: 4, ease: "sine.inOut", yoyo: true, repeat: 4, delay: 1.5 });
+      // 发光呼吸
+      if (style === "premium") {
+        gsap.to(head, { textShadow: "0 0 40px rgba(99,102,241,0.5), 0 0 80px rgba(99,102,241,0.3)", duration: 2.5, ease: "sine.inOut", yoyo: true, repeat: 4, delay: 1.5 });
+      } else if (style === "dark-neon" || style === "tech-glow") {
+        gsap.to(head, { textShadow: "0 0 60px currentColor, 0 0 120px currentColor", duration: 2, ease: "sine.inOut", yoyo: true, repeat: 4, delay: 1.5 });
+      }
+    }
+    if (sub) gsap.fromTo(sub, { y: -10, opacity: 0 }, { y: 0, opacity: 1, duration: 1, ease: "power2.inOut", delay: 1 });
+
+    // ═══ 左卡 - 柔和滑入 + 缩放 + 持续浮动 ═══
+    if (cardL) {
+      gsap.fromTo(cardL,
+        { x: -80, opacity: 0, scale: 0.92 },
+        { x: 0, opacity: 1, scale: 1, duration: 1.2, ease: "power3.inOut", delay: 1.3 }
+      );
+      // 持续呼吸浮动
+      gsap.to(cardL, { y: "+=6", duration: 4, ease: "sine.inOut", yoyo: true, repeat: 3, delay: 2.5 });
+    }
+    // ═══ 右卡 - 柔和滑入 + 光晕呼吸 ═══
+    if (cardR) {
+      gsap.fromTo(cardR,
+        { x: 80, opacity: 0, scale: 0.92 },
+        { x: 0, opacity: 1, scale: 1, duration: 1.3, ease: "power3.inOut", delay: 1.5 }
+      );
+      // 持续呼吸
+      gsap.to(cardR, { y: "+=5", duration: 4.5, ease: "sine.inOut", yoyo: true, repeat: 3, delay: 2.8 });
+      gsap.to(cardR, { scale: 1.015, duration: 3, ease: "sine.inOut", yoyo: true, repeat: 3, delay: 2.8 });
+      // 光晕呼吸
+      if (style === "premium") {
+        gsap.to(cardR, { boxShadow: `0 0 40px rgba(99,102,241,0.3)`, duration: 2.5, ease: "sine.inOut", yoyo: true, repeat: 4, delay: 2.8 });
+      } else if (style === "dark-neon" || style === "tech-glow" || style === "ref-comparison") {
+        gsap.to(cardR, { boxShadow: `0 0 50px ${winColor}80`, duration: 2, ease: "sine.inOut", yoyo: true, repeat: 4, delay: 2.8 });
+      }
+    }
+
+    // ═══ 粒子 - 沿弧线路径流动（非爆发） ═══
+    for (let i = 0; i < 20; i++) {
+      const p = document.querySelector(`#p-${sceneId}-${i}`);
+      if (p) {
+        const angle = (i / 20) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+        const dist = 40 + Math.random() * 80;
+        const endX = Math.cos(angle) * dist;
+        const endY = Math.sin(angle) * dist;
+        const size = 2 + Math.random() * 3;
+        const color = i % 2 === 0 ? getAccentColor(style, "primary") : getAccentColor(style, "secondary");
+        gsap.set(p, {
+          left: "50%", top: "55%",
+          width: size, height: size,
+          backgroundColor: color,
+          boxShadow: `0 0 ${size*2}px ${color}80`,
+          xPercent: -50, yPercent: -50,
+        });
+        // 柔和扩散 - sine缓动
+        gsap.fromTo(p,
+          { scale: 0, opacity: 0 },
+          { scale: 1, opacity: 0.6, duration: 0.8, ease: "power2.inOut", delay: 1.8 + i * 0.04 }
+        );
+        gsap.to(p, {
+          x: endX + "px", y: endY + "px",
+          opacity: 0,
+          scale: 0.3,
+          duration: 2 + Math.random() * 1,
+          ease: "sine.inOut",
+          delay: 1.8 + i * 0.04,
+        });
+      }
+    }
+
+    // ═══ 脉冲环 - 柔和扩散 ═══
+    for (let i = 0; i < 3; i++) {
+      const pr = document.querySelector(`#pr-${sceneId}-${i}`);
+      if (pr) {
+        gsap.set(pr, {
+          left: "65%", top: "55%",
+          width: 30, height: 30,
+          xPercent: -50, yPercent: -50,
+          border: `1px solid ${winColor}80`,
+          opacity: 0,
+          borderRadius: "50%",
+        });
+        gsap.fromTo(pr,
+          { scale: 0.3, opacity: 0.5 },
+          { scale: 12, opacity: 0, duration: 2.5, ease: "power2.out", delay: 2.5 + i * 0.8 }
+        );
+      }
+    }
+
+    // ═══ premium: 节点光晕 ═══
+    if (style === "premium") {
+      for (let i = 0; i < 4; i++) {
+        const glow = document.querySelector(`#nglow-${sceneId}-${i}`);
+        if (glow) {
+          const isLeft = i < 2;
+          const xPct = isLeft ? 25 : 75;
+          const yPct = 45 + (i % 2) * 10;
+          const color = isLeft ? "#a855f7" : "#6366f1";
+          gsap.set(glow, {
+            left: xPct + "%", top: yPct + "%",
+            width: 80, height: 80,
+            xPercent: -50, yPercent: -50,
+            backgroundColor: color,
+          });
+          gsap.to(glow, { opacity: 0.15, duration: 2, ease: "power2.inOut", delay: 1.5 + i * 0.2 });
+          gsap.to(glow, { scale: 1.3, duration: 3, ease: "sine.inOut", yoyo: true, repeat: 3, delay: 2 + i * 0.2 });
+        }
+      }
+    }
+
+  } else if (scene.visualType === "flow") {
+    const sub = document.querySelector(`#sub-${sceneId}`);
+    if (sub) {
+      gsap.fromTo(sub, { y: -10, opacity: 0 }, { y: 0, opacity: 1, duration: 1, ease: "power2.inOut", delay: 0.3 });
+      gsap.to(sub, { backgroundPosition: "-200% 0%", duration: 4, ease: "sine.inOut", repeat: 3, delay: 1 });
+    }
+
+    // ═══ 能量线 - 沿路径自然生长 ═══
+    const eline = document.querySelector(`#eline-${sceneId}`);
+    if (eline) {
+      gsap.set(eline, { top: "42%", height: 0, opacity: 0 });
+      gsap.to(eline, { height: "40%", opacity: 0.5, duration: 2, ease: "power2.inOut", delay: 0.8 });
+      // 持续呼吸
+      gsap.to(eline, { opacity: 0.3, duration: 3, ease: "sine.inOut", yoyo: true, repeat: 3, delay: 2.8 });
+    }
+
+    // ═══ premium: 连接线生长 ═══
+    if (style === "premium") {
+      for (let i = 0; i < 4; i++) {
+        const cline = document.querySelector(`#cline-${sceneId}-${i}`);
+        if (cline) {
+          gsap.set(cline, {
+            left: "50%",
+            top: `${36 + i * 12}%`,
+            height: 0,
+            opacity: 0,
+          });
+          gsap.to(cline, { height: 12, opacity: 0.4, duration: 0.8, ease: "power2.inOut", delay: 1.2 + i * 0.5 });
+        }
+      }
+    }
+
+    scene.data.steps.forEach((_, i) => {
+      const step = document.querySelector(`#step-${sceneId}-${i}`);
+      if (step) {
+        const delay = 0.8 + i * 0.35;
+        // ═══ 柔和滑入 + 缩放渐变 ═══
+        gsap.fromTo(step,
+          { x: -50, opacity: 0, scale: 0.95 },
+          { x: 0, opacity: 1, scale: 1, duration: 1, ease: "power3.inOut", delay }
+        );
+        // 激活高亮 - 柔和过渡
+        gsap.to(step, { className: "+=active", duration: 0.6, ease: "power2.inOut", delay: delay + 0.6 });
+        gsap.to(step, { className: "-=active", duration: 0.6, ease: "power2.inOut", delay: delay + 2 });
+        // 持续呼吸浮动 - 极轻微
+        gsap.to(step, { y: "+=4", duration: 3.5 + i * 0.2, ease: "sine.inOut", yoyo: true, repeat: 3, delay: delay + 0.5 });
+      }
+    });
+
+    // ═══ 粒子沿路径有序流动 ═══
+    for (let i = 0; i < 8; i++) {
+      const p = document.querySelector(`#fp-${sceneId}-${i}`);
+      if (p) {
+        const color = getAccentColor(style, i % 2 === 0 ? "primary" : "secondary");
+        gsap.set(p, {
+          left: "8%",
+          top: `${42 + i * 5}%`,
+          width: 3, height: 3,
+          backgroundColor: color,
+          boxShadow: `0 0 6px ${color}80`,
+          opacity: 0,
+        });
+        // 沿水平路径流动 - sine缓动
+        gsap.to(p, {
+          x: "280%",
+          opacity: 0.5,
+          duration: 3 + Math.random() * 1.5,
+          ease: "sine.inOut",
+          delay: 1.5 + i * 0.3,
+          repeat: 2,
+          repeatDelay: 1,
+        });
+        gsap.to(p, {
+          opacity: 0,
+          duration: 1,
+          ease: "sine.inOut",
+          delay: 2.5 + i * 0.3,
+          repeat: 2,
+          repeatDelay: 2,
+        });
+      }
+    }
+
+  } else if (scene.visualType === "formula") {
+    const sub = document.querySelector(`#sub-${sceneId}`);
+    if (sub) {
+      gsap.fromTo(sub, { y: -10, opacity: 0 }, { y: 0, opacity: 1, duration: 1, ease: "power2.inOut", delay: 0.3 });
+      gsap.to(sub, { backgroundPosition: "-200% 0%", duration: 4, ease: "sine.inOut", repeat: 3, delay: 1 });
+    }
+
+    // ═══ 公式token - 逐步出现 + 清晰节奏 ═══
+    scene.data.tokens.forEach((token, i) => {
+      const tok = document.querySelector(`#tok-${sceneId}-${i}`);
+      if (tok) {
+        const delay = 0.8 + i * 0.4;
+        // 柔和缩放 + 位移 + 透明度渐变
+        gsap.fromTo(tok,
+          { scale: 0.85, opacity: 0, y: 30 },
+          { scale: 1, opacity: 1, y: 0, duration: 1.2, ease: "power3.inOut", delay }
+        );
+        // 最后一项持续柔和发光
+        if (i === scene.data.tokens.length - 1) {
+          if (style === "premium") {
+            gsap.to(tok, { boxShadow: "0 0 30px rgba(168,85,247,0.3)", duration: 2.5, ease: "sine.inOut", yoyo: true, repeat: 3, delay: delay + 1 });
+            gsap.to(tok, { scale: 1.02, duration: 3, ease: "sine.inOut", yoyo: true, repeat: 3, delay: delay + 1 });
+          } else if (style === "dark-neon" || style === "tech-glow" || style === "ref-comparison") {
+            gsap.to(tok, { boxShadow: "0 0 40px currentColor", duration: 2, ease: "sine.inOut", yoyo: true, repeat: 3, delay: delay + 0.8 });
+            gsap.to(tok, { scale: 1.03, duration: 2.5, ease: "sine.inOut", yoyo: true, repeat: 3, delay: delay + 0.8 });
+          }
+        }
+        // 持续呼吸浮动
+        gsap.to(tok, { y: "+=3", duration: 3.5 + i * 0.2, ease: "sine.inOut", yoyo: true, repeat: 3, delay: delay + 0.5 });
+
+        // ═══ premium: 节点光晕逐个点亮 ═══
+        if (style === "premium") {
+          const glow = document.querySelector(`#nglow-${sceneId}-${i}`);
+          if (glow) {
+            gsap.set(glow, {
+              left: "50%", top: `${40 + i * 12}%`,
+              width: 60, height: 30,
+              xPercent: -50, yPercent: -50,
+              backgroundColor: i === scene.data.tokens.length - 1 ? "#a855f7" : "#6366f1",
+            });
+            gsap.to(glow, { opacity: 0.12, duration: 1.5, ease: "power2.inOut", delay: delay + 0.3 });
+            gsap.to(glow, { scale: 1.2, duration: 3, ease: "sine.inOut", yoyo: true, repeat: 3, delay: delay + 0.8 });
+          }
+        }
+      }
+    });
+
+    // ═══ 环绕粒子 - 椭圆轨道缓慢流动 ═══
+    for (let i = 0; i < 12; i++) {
+      const p = document.querySelector(`#tp-${sceneId}-${i}`);
+      if (p) {
+        const color = getAccentColor(style, i % 2 === 0 ? "secondary" : "accent");
+        gsap.set(p, {
+          left: "50%", top: "50%",
+          width: 2 + Math.random() * 2,
+          height: 2 + Math.random() * 2,
+          backgroundColor: color,
+          boxShadow: `0 0 4px ${color}80`,
+          xPercent: -50, yPercent: -50,
+          opacity: 0,
+        });
+        const rx = 40 + Math.random() * 25;
+        const ry = 15 + Math.random() * 10;
+        const startAngle = (i / 12) * Math.PI * 2;
+        const dur = 5 + Math.random() * 3;
+        gsap.to(p, { opacity: 0.4, duration: 1, ease: "power2.inOut", delay: 1.5 + i * 0.1 });
+        const angleProxy = { angle: startAngle };
+        gsap.to(angleProxy, {
+          angle: startAngle + Math.PI * 2,
+          duration: dur,
+          ease: "none",
+          repeat: 2,
+          delay: 1.5 + i * 0.1,
+          onUpdate: function() {
+            const a = angleProxy.angle;
+            gsap.set(p, {
+              x: Math.cos(a) * rx,
+              y: Math.sin(a) * ry,
+              scale: 0.4 + (Math.sin(a) + 1) * 0.3,
+            });
+          }
+        });
+      }
+    }
+
+  } else if (scene.visualType === "code") {
+    const sub = document.querySelector(`#sub-${sceneId}`);
+    const codeCard = document.querySelector(`#code-${sceneId}`);
+
+    if (sub) {
+      gsap.fromTo(sub, { y: -10, opacity: 0 }, { y: 0, opacity: 1, duration: 1, ease: "power2.inOut", delay: 0.3 });
+      gsap.to(sub, { backgroundPosition: "-200% 0%", duration: 4, ease: "sine.inOut", repeat: 3, delay: 1 });
+    }
+    // ═══ 代码卡片 - 柔和缩放入场 ═══
+    if (codeCard) {
+      gsap.fromTo(codeCard, { scale: 0.92, opacity: 0, y: 20 }, { scale: 1, opacity: 1, y: 0, duration: 1.5, ease: "power3.inOut", delay: 0.6 });
+      // 持续呼吸
+      gsap.to(codeCard, { y: "+=3", duration: 4, ease: "sine.inOut", yoyo: true, repeat: 3, delay: 2 });
+    }
+
+    // ═══ 代码行 - 逐步出现 + 清晰节奏 ═══
+    scene.data.code.forEach((line, i) => {
+      const lineEl = document.querySelector(`#code-line-${sceneId}-${i}`);
+      if (lineEl) {
+        gsap.fromTo(lineEl,
+          { opacity: 0, x: -15, clipPath: "inset(0 100% 0 0)" },
+          { opacity: 1, x: 0, clipPath: "inset(0 0% 0 0)", duration: 1, ease: "power2.inOut", delay: 1.2 + i * 0.5 }
+        );
+      }
+    });
+
+    // 光标闪烁 - 柔和
+    const cursor = document.querySelector(`#cursor-${sceneId}`);
+    if (cursor) {
+      const cColor = style === "premium" ? "#818cf8" : style === "tech-glow" ? "#00ff88" : style === "dark-neon" ? "#00d4ff" : "#265cff";
+      gsap.set(cursor, { backgroundColor: cColor, boxShadow: `0 0 8px ${cColor}80` });
+      gsap.to(cursor, { opacity: 0, duration: 0.6, yoyo: true, repeat: 6, ease: "sine.inOut", delay: 3 });
+    }
+
+    // ═══ 扫描光束 - 柔和缓慢 ═══
+    const scanBeam = document.querySelector(`#scanbeam-${sceneId}`);
+    if (scanBeam) {
+      gsap.set(scanBeam, { top: "40%", opacity: 0 });
+      gsap.fromTo(scanBeam,
+        { top: "42%", opacity: 0 },
+        { top: "72%", opacity: 0.4, duration: 4, ease: "sine.inOut", repeat: 2, delay: 1.2 }
+      );
+    }
+
+  } else if (scene.visualType === "process") {
+    const sub = document.querySelector(`#sub-${sceneId}`);
+    if (sub) {
+      gsap.fromTo(sub, { y: -10, opacity: 0 }, { y: 0, opacity: 1, duration: 1, ease: "power2.inOut", delay: 0.3 });
+      gsap.to(sub, { backgroundPosition: "-200% 0%", duration: 4, ease: "sine.inOut", repeat: 3, delay: 1 });
+    }
+
+    scene.data.steps.forEach((_, i) => {
+      const step = document.querySelector(`#pstep-${sceneId}-${i}`);
+      const label = document.querySelector(`#plabel-${sceneId}-${i}`);
+      const arrow = document.querySelector(`#parrow-${sceneId}-${i}`);
+      const delay = 0.8 + i * 0.4;
+
+      if (step) {
+        // ═══ 柔和缩放入场 - 无旋转 ═══
+        gsap.fromTo(step,
+          { scale: 0.85, opacity: 0, y: 20 },
+          { scale: 1, opacity: 1, y: 0, duration: 1, ease: "power3.inOut", delay }
+        );
+        // 激活高亮 - 柔和过渡
+        gsap.to(step, { className: "+=active", duration: 0.6, ease: "power2.inOut", delay: delay + 0.5 });
+        gsap.to(step, { className: "-=active", duration: 0.6, ease: "power2.inOut", delay: delay + 2.5 });
+        // 持续呼吸
+        gsap.to(step, { y: "+=4", duration: 3.5 + i * 0.2, ease: "sine.inOut", yoyo: true, repeat: 3, delay: delay + 0.8 });
+
+        // 数字跳动 - 柔和
+        const countEl = document.querySelector(`#pcount-${sceneId}-${i}`);
+        if (countEl) {
+          const obj = { val: 0 };
+          gsap.to(obj, {
+            val: i + 1,
+            duration: 1,
+            ease: "power2.inOut",
+            delay: delay + 0.1,
+            onUpdate: function() {
+              countEl.textContent = Math.ceil(obj.val);
+            }
+          });
+        }
+      }
+      if (label) gsap.fromTo(label, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.8, ease: "power2.inOut", delay: delay + 0.3 });
+      // ═══ 箭头/连接线 - 沿路径生长 ═══
+      if (arrow) {
+        gsap.fromTo(arrow, { scaleY: 0, opacity: 0 }, { scaleY: 1, opacity: 1, duration: 0.8, ease: "power2.inOut", delay: delay + 0.6 });
+        gsap.to(arrow, { opacity: 0.4, duration: 2, ease: "sine.inOut", yoyo: true, repeat: 3, delay: delay + 1.2 });
+      }
+    });
+
+    // ═══ 粒子沿路径流动 ═══
+    for (let i = 0; i < 15; i++) {
+      const p = document.querySelector(`#pp-${sceneId}-${i}`);
+      if (p) {
+        const color = getAccentColor(style, i % 3 === 0 ? "primary" : i % 3 === 1 ? "secondary" : "accent");
+        gsap.set(p, {
+          left: "50%", top: "55%",
+          width: 2 + Math.random() * 2,
+          height: 2 + Math.random() * 2,
+          backgroundColor: color,
+          boxShadow: `0 0 ${4 + Math.random()*3}px ${color}80`,
+          xPercent: -50, yPercent: -50,
+          opacity: 0,
+        });
+        const angle = (i / 15) * Math.PI * 2 + Math.random() * 0.4;
+        const dist = 25 + Math.random() * 60;
+        // 柔和扩散 - sine缓动
+        gsap.fromTo(p,
+          { scale: 0, opacity: 0 },
+          { scale: 1, opacity: 0.5, duration: 0.8, ease: "power2.inOut", delay: 1.5 + i * 0.06 }
+        );
+        gsap.to(p, {
+          x: Math.cos(angle) * dist + "px",
+          y: Math.sin(angle) * dist + "px",
+          opacity: 0,
+          scale: 0.3,
+          duration: 2 + Math.random() * 0.8,
+          ease: "sine.inOut",
+          delay: 1.5 + i * 0.06,
+        });
+      }
+    }
+  }
+
+  // 场景解说文字 - 淡入上滑
+  const caption = document.querySelector(`#caption-${sceneId}`);
+  if (caption) {
+    gsap.fromTo(caption,
+      { y: 20, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.6, ease: "power2.out", delay: 1.5 }
+    );
+  }
+
+  // 引用文献栏 - 淡入
+  const refbar = document.querySelector(`#refbar-${sceneId}`);
+  if (refbar) {
+    gsap.fromTo(refbar,
+      { opacity: 0 },
+      { opacity: 1, duration: 0.8, ease: "power2.out", delay: 1.8 }
+    );
+    // 引用标签逐个弹入
+    refbar.querySelectorAll('.ref-chip').forEach((chip, i) => {
+      gsap.fromTo(chip,
+        { scale: 0, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.4, ease: "back.out(3)", delay: 2 + i * 0.1 }
+      );
+    });
+  }
+}
+
+// ═══ 交互 ═══
+document.addEventListener("click", (e) => {
+  if (e.target.classList.contains("style-tab")) {
+    const sceneId = e.target.closest(".style-tabs").dataset.scene;
+    const style = e.target.dataset.style;
+    choices[sceneId] = style;
+    e.target.closest(".style-tabs").querySelectorAll(".style-tab").forEach(t => t.classList.remove("active"));
+    e.target.classList.add("active");
+    document.getElementById(`selected-${sceneId}`).textContent = STYLE_NAMES[style];
+    renderPreview(sceneId, style);
+  }
+  if (e.target.classList.contains("replay")) {
+    const sceneId = e.target.dataset.scene;
+    renderPreview(sceneId, choices[scene.id]);
+  }
+  if (e.target.closest(".preview-frame")) {
+    const frame = e.target.closest(".preview-frame");
+    const sceneId = frame.dataset.scene;
+    renderPreview(sceneId, choices[sceneId]);
+  }
+  if (e.target.id === "play-all") {
+    SCENES.forEach((scene, i) => {
+      setTimeout(() => renderPreview(scene.id, choices[scene.id]), i * 180);
+    });
+  }
+  if (e.target.classList.contains("apply-style")) {
+    const style = e.target.dataset.style;
+    SCENES.forEach(scene => {
+      choices[scene.id] = style;
+      const tabs = document.querySelector(`.style-tabs[data-scene="${scene.id}"]`);
+      if (tabs) tabs.querySelectorAll(".style-tab").forEach(t => t.classList.toggle("active", t.dataset.style === style));
+      document.getElementById(`selected-${scene.id}`).textContent = STYLE_NAMES[style];
+      renderPreview(scene.id, style);
+    });
+  }
+  if (e.target.id === "save-btn") {
+    const blob = new Blob([JSON.stringify(choices, null, 2)], {type: "application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "style-choices.json";
+    a.click();
+    URL.revokeObjectURL(url);
+    const result = Object.entries(choices).map(([k, v]) => `${k}: ${STYLE_NAMES[v]}`).join("\n");
+    alert("选择已保存！\n\n" + result + "\n\n请将 style-choices.json 发给我");
+  }
+});
+
+// 初始化 - 错开时间依次播放
+SCENES.forEach((scene, i) => {
+  setTimeout(() => renderPreview(scene.id, choices[scene.id]), i * 120);
+});
+</script>
+</body>
+</html>

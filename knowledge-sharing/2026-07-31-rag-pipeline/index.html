@@ -1,0 +1,2274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG全流程拆解：从文档到大模型回答</title>
+<style>
+/* ============ 基础重置 ============ */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0e27; --bg2:#111638; --surface:#161b3d;
+  --cyan:#00d4ff; --purple:#a855f7; --green:#00ff88;
+  --orange:#ff8c00; --red:#ff4466; --yellow:#ffd700;
+  --text:#e2e8f0; --text-dim:#8892b0; --text-bright:#fff;
+  --border:rgba(0,212,255,0.15);
+  --grad-cp:linear-gradient(135deg,#00d4ff,#a855f7);
+  --grad-go:linear-gradient(135deg,#00ff88,#ff8c00);
+}
+html{scroll-behavior:smooth;font-size:16px}
+body{
+  font-family:'Segoe UI','Microsoft YaHei',system-ui,sans-serif;
+  background:var(--bg);color:var(--text);line-height:1.7;
+  overflow-x:hidden;
+}
+canvas#particles{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.container{max-width:1200px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
+
+/* ============ 通用动画类 ============ */
+.reveal{opacity:0;transform:translateY(40px);transition:opacity .8s ease,transform .8s ease}
+.reveal.active{opacity:1;transform:translateY(0)}
+.reveal-l{opacity:0;transform:translateX(-50px);transition:all .8s ease}
+.reveal-l.active{opacity:1;transform:translateX(0)}
+.reveal-r{opacity:0;transform:translateX(50px);transition:all .8s ease}
+.reveal-r.active{opacity:1;transform:translateX(0)}
+.reveal-s{opacity:0;transform:scale(.8);transition:all .6s ease}
+.reveal-s.active{opacity:1;transform:scale(1)}
+
+/* ============ 导航 ============ */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(10,14,39,.85);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  transition:padding .3s;
+}
+nav .nav-inner{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;max-width:1200px;margin:0 auto}
+nav .logo{font-size:1.3rem;font-weight:700;background:var(--grad-cp);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+nav .nav-links{display:flex;gap:20px;list-style:none}
+nav .nav-links a{color:var(--text-dim);text-decoration:none;font-size:.9rem;transition:color .3s}
+nav .nav-links a:hover{color:var(--cyan)}
+
+/* ============ Hero ============ */
+#hero{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  text-align:center;position:relative;
+}
+#hero::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at center,rgba(0,212,255,.08),transparent 60%);
+}
+.hero-badge{
+  display:inline-block;padding:6px 20px;border:1px solid var(--cyan);
+  border-radius:99px;color:var(--cyan);font-size:.85rem;margin-bottom:24px;
+  animation:pulse-border 2s infinite;
+}
+@keyframes pulse-border{0%,100%{box-shadow:0 0 0 0 rgba(0,212,255,.3)}50%{box-shadow:0 0 20px 4px rgba(0,212,255,.1)}}
+#hero h1{
+  font-size:4.5rem;font-weight:800;line-height:1.1;margin-bottom:16px;
+  background:linear-gradient(135deg,#00d4ff 0%,#a855f7 50%,#00ff88 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  animation:gradient-shift 4s ease infinite;
+  background-size:200% 200%;
+}
+@keyframes gradient-shift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+#hero .subtitle{font-size:1.5rem;color:var(--text-dim);margin-bottom:8px}
+#hero .desc{font-size:1.1rem;color:var(--text-dim);max-width:600px;margin:0 auto 32px}
+.hero-stats{display:flex;gap:40px;justify-content:center;margin-top:40px}
+.hero-stat{text-align:center}
+.hero-stat .num{font-size:2.5rem;font-weight:700;color:var(--cyan)}
+.hero-stat .label{font-size:.85rem;color:var(--text-dim)}
+.scroll-hint{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);color:var(--text-dim);font-size:.8rem;animation:bounce 2s infinite}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(10px)}}
+
+/* ============ Section通用 ============ */
+section{padding:100px 0;position:relative}
+.section-header{text-align:center;margin-bottom:60px}
+.section-num{font-size:.8rem;color:var(--cyan);font-weight:600;letter-spacing:2px;text-transform:uppercase}
+.section-title{font-size:2.8rem;font-weight:700;margin:8px 0 12px;color:var(--text-bright)}
+.section-subtitle{font-size:1.1rem;color:var(--text-dim);max-width:700px;margin:0 auto}
+
+/* ============ 问题卡片 ============ */
+.problem-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:40px}
+.problem-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:32px;text-align:center;transition:transform .3s,box-shadow .3s;
+  position:relative;overflow:hidden;
+}
+.problem-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:var(--grad-cp);transform:scaleX(0);transition:transform .4s;transform-origin:left;
+}
+.problem-card:hover::before{transform:scaleX(1)}
+.problem-card:hover{transform:translateY(-6px);box-shadow:0 12px 40px rgba(0,212,255,.1)}
+.problem-card .icon{font-size:2.5rem;margin-bottom:16px}
+.problem-card h3{font-size:1.2rem;color:var(--text-bright);margin-bottom:8px}
+.problem-card p{font-size:.95rem;color:var(--text-dim)}
+.problem-card .tag{display:inline-block;margin-top:12px;padding:4px 12px;border-radius:99px;font-size:.75rem;font-weight:600}
+.tag-red{background:rgba(255,68,102,.15);color:var(--red)}
+.tag-orange{background:rgba(255,140,0,.15);color:var(--orange)}
+.tag-yellow{background:rgba(255,215,0,.15);color:var(--yellow)}
+
+/* ============ 开场动画 ============ */
+.intro-overlay{
+  position:fixed;inset:0;z-index:9999;
+  background:var(--bg);display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:24px;
+  transition:opacity .8s ease,visibility .8s;
+}
+.intro-overlay.hidden{opacity:0;visibility:hidden;pointer-events:none}
+.intro-bg{
+  position:absolute;inset:0;overflow:hidden;
+}
+.intro-bg::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at center,rgba(0,212,255,.15),transparent 50%);
+  animation:intro-pulse 2s ease-in-out infinite;
+}
+@keyframes intro-pulse{0%,100%{opacity:.5}50%{opacity:1}}
+.intro-particles{position:absolute;inset:0}
+.intro-content{position:relative;z-index:1;text-align:center}
+.intro-line{
+  font-size:1.2rem;color:var(--text-dim);
+  opacity:0;transform:translateY(20px);
+  transition:all .6s ease;
+}
+.intro-line.show{opacity:1;transform:translateY(0)}
+.intro-title{
+  font-size:4rem;font-weight:900;
+  background:linear-gradient(135deg,#00d4ff,#a855f7,#00ff88);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-size:200% 200%;
+  animation:gradient-shift 3s ease infinite;
+  opacity:0;transform:scale(.5);
+  transition:all .8s cubic-bezier(.34,1.56,.64,1);
+  margin:16px 0;
+}
+.intro-title.show{opacity:1;transform:scale(1)}
+.intro-subtitle{
+  font-size:1.3rem;color:var(--cyan);
+  opacity:0;transform:translateY(20px);
+  transition:all .6s ease .3s;
+}
+.intro-subtitle.show{opacity:1;transform:translateY(0)}
+.intro-cta{
+  margin-top:32px;display:flex;gap:16px;justify-content:center;align-items:center;
+  opacity:0;transform:translateY(20px);
+  transition:all .6s ease .6s;
+}
+.intro-cta.show{opacity:1;transform:translateY(0)}
+.intro-cta .cta-btn{
+  padding:12px 32px;border-radius:99px;
+  background:var(--grad-cp);color:var(--bg);
+  font-size:1rem;font-weight:700;cursor:pointer;
+  border:none;transition:transform .2s;
+}
+.intro-cta .cta-btn:hover{transform:scale(1.05)}
+.intro-cta .cta-text{color:var(--text-dim);font-size:.9rem}
+.intro-skip{
+  position:absolute;bottom:30px;right:30px;
+  color:var(--text-dim);font-size:.8rem;cursor:pointer;
+  opacity:.5;transition:opacity .3s;
+}
+.intro-skip:hover{opacity:1}
+
+/* ============ 结尾动画 ============ */
+.outro-overlay{
+  position:fixed;inset:0;z-index:9999;
+  background:var(--bg);display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:24px;
+  opacity:0;visibility:hidden;
+  transition:opacity .8s ease,visibility .8s;
+}
+.outro-overlay.show{opacity:1;visibility:visible}
+.outro-bg{position:absolute;inset:0;overflow:hidden}
+.outro-bg::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at center,rgba(168,85,247,.15),transparent 50%);
+  animation:intro-pulse 2s ease-in-out infinite;
+}
+.outro-content{position:relative;z-index:1;text-align:center}
+.outro-title{
+  font-size:3.5rem;font-weight:900;
+  background:linear-gradient(135deg,#00ff88,#00d4ff,#a855f7);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-size:200% 200%;
+  animation:gradient-shift 3s ease infinite;
+  opacity:0;transform:scale(.5);
+  transition:all .8s cubic-bezier(.34,1.56,.64,1);
+}
+.outro-overlay.show .outro-title{opacity:1;transform:scale(1)}
+.outro-subtitle{
+  font-size:1.2rem;color:var(--cyan);
+  opacity:0;transform:translateY(20px);
+  transition:all .6s ease .3s;
+}
+.outro-overlay.show .outro-subtitle{opacity:1;transform:translateY(0)}
+.outro-links{
+  display:flex;gap:20px;justify-content:center;margin-top:24px;
+  opacity:0;transform:translateY(20px);
+  transition:all .6s ease .6s;
+}
+.outro-overlay.show .outro-links{opacity:1;transform:translateY(0)}
+.outro-link{
+  padding:10px 24px;border-radius:99px;
+  border:2px solid var(--cyan);color:var(--cyan);
+  text-decoration:none;font-size:.9rem;font-weight:600;
+  transition:all .3s;
+}
+.outro-link:hover{background:var(--cyan);color:var(--bg)}
+.outro-repo{
+  margin-top:20px;padding:12px 24px;
+  background:rgba(0,0,0,.4);border:1px solid var(--border);
+  border-radius:10px;font-size:.85rem;color:var(--text-dim);
+  opacity:0;transform:translateY(20px);
+  transition:all .6s ease .9s;
+}
+.outro-overlay.show .outro-repo{opacity:1;transform:translateY(0)}
+.outro-repo code{color:var(--green);font-family:Consolas,monospace}
+.outro-close{
+  position:absolute;top:30px;right:30px;
+  color:var(--text-dim);font-size:1.5rem;cursor:pointer;
+  opacity:.5;transition:opacity .3s;
+}
+.outro-close:hover{opacity:1}
+
+/* ============ 幻觉演示 ============ */
+.hallucination-demo{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:32px;margin:40px 0;
+}
+.hallu-question{
+  display:flex;align-items:center;gap:12px;margin-bottom:20px;
+  padding:14px 20px;background:rgba(0,212,255,.08);border-radius:10px;
+  border:1px solid var(--cyan);
+}
+.hallu-question .q-icon{font-size:1.5rem}
+.hallu-question .q-text{color:var(--cyan);font-size:1rem;font-weight:600}
+.hallu-layout{display:grid;grid-template-columns:280px 1fr;gap:24px}
+/* 成因列表 */
+.cause-list{display:flex;flex-direction:column;gap:10px}
+.cause-item{
+  padding:14px 16px;border-radius:10px;border:1px solid var(--border);
+  background:rgba(0,0,0,.2);cursor:pointer;transition:all .4s;
+  display:flex;align-items:flex-start;gap:10px;
+}
+.cause-item.active{
+  border-color:var(--red);background:rgba(255,68,102,.08);
+  box-shadow:0 0 15px rgba(255,68,102,.1);transform:translateX(4px);
+}
+.cause-item .cause-icon{font-size:1.3rem;flex-shrink:0;margin-top:2px}
+.cause-item .cause-body h4{font-size:.9rem;color:var(--text-bright);margin-bottom:2px}
+.cause-item .cause-body p{font-size:.75rem;color:var(--text-dim)}
+.cause-item.active .cause-body h4{color:var(--red)}
+/* 对比区域 */
+.compare-area{display:flex;flex-direction:column;gap:16px}
+.compare-card{
+  padding:20px;border-radius:12px;border:2px solid;
+  transition:all .5s;position:relative;overflow:hidden;
+}
+.compare-card.no-rag{border-color:var(--red);background:rgba(255,68,102,.05)}
+.compare-card.with-rag{border-color:var(--green);background:rgba(0,255,136,.05)}
+.compare-label{
+  font-size:.85rem;font-weight:700;margin-bottom:10px;
+  display:flex;align-items:center;gap:8px;
+}
+.compare-card.no-rag .compare-label{color:var(--red)}
+.compare-card.with-rag .compare-label{color:var(--green)}
+.compare-text{font-size:.9rem;line-height:1.8;color:var(--text)}
+.hallu-marker{
+  display:inline-block;padding:2px 8px;border-radius:4px;
+  font-size:.7rem;font-weight:700;margin-left:4px;
+}
+.hallu-marker.fake{background:rgba(255,68,102,.2);color:var(--red);animation:flash-red 1s infinite}
+.hallu-marker.real{background:rgba(0,255,136,.2);color:var(--green)}
+@keyframes flash-red{0%,100%{opacity:1}50%{opacity:.4}}
+.compare-text .fade-in{animation:fade-in-text .5s ease}
+@keyframes fade-in-text{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+/* RAG解决方案总结 */
+.rag-solution{
+  margin-top:20px;padding:20px;background:rgba(0,255,136,.05);
+  border:1px solid var(--green);border-radius:12px;
+}
+.rag-solution h4{color:var(--green);margin-bottom:10px;font-size:1rem}
+.rag-solution .sol-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.rag-solution .sol-item{
+  display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--text-dim);
+}
+.rag-solution .sol-item .check{color:var(--green);font-weight:700;font-size:1rem}
+@media(max-width:768px){
+  .hallu-layout{grid-template-columns:1fr}
+  .rag-solution .sol-grid{grid-template-columns:1fr}
+}
+
+/* ============ 流水线图 ============ */
+.pipeline-wrap{margin:40px 0}
+.pipeline-svg{width:100%;height:auto}
+.pipe-step{cursor:pointer;transition:filter .3s}
+.pipe-step:hover{filter:brightness(1.3)}
+.pipe-line{stroke-dasharray:8 4;animation:flow 1.5s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-12}}
+.pipe-step.active circle{filter:drop-shadow(0 0 8px var(--cyan))}
+.pipe-step.active text{fill:var(--cyan)}
+
+/* ============ 文档切分动画 ============ */
+.chunk-demo{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:32px;margin:30px 0;
+}
+.chunk-original{
+  font-size:1rem;line-height:1.9;color:var(--text-dim);
+  padding:20px;background:rgba(0,0,0,.3);border-radius:8px;margin-bottom:24px;
+  border-left:3px solid var(--purple);
+}
+.chunks-container{display:flex;flex-wrap:wrap;gap:12px}
+.chunk-box{
+  padding:12px 16px;border-radius:8px;font-size:.85rem;
+  opacity:0;transform:translateY(20px) scale(.9);
+  transition:all .4s ease;border:1px solid;
+}
+.chunk-box.show{opacity:1;transform:translateY(0) scale(1)}
+.chunk-box:nth-child(4n+1){background:rgba(0,212,255,.1);border-color:var(--cyan);color:var(--cyan)}
+.chunk-box:nth-child(4n+2){background:rgba(168,85,247,.1);border-color:var(--purple);color:var(--purple)}
+.chunk-box:nth-child(4n+3){background:rgba(0,255,136,.1);border-color:var(--green);color:var(--green)}
+.chunk-box:nth-child(4n+0){background:rgba(255,140,0,.1);border-color:var(--orange);color:var(--orange)}
+.chunk-strategy{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.strategy-btn{
+  padding:8px 20px;border:1px solid var(--border);border-radius:8px;
+  background:transparent;color:var(--text-dim);cursor:pointer;font-size:.85rem;
+  transition:all .3s;
+}
+.strategy-btn.active{background:var(--cyan);color:var(--bg);border-color:var(--cyan);font-weight:600}
+.strategy-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+
+/* ============ 向量空间可视化 ============ */
+.vector-space-wrap{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:24px;margin:30px 0;position:relative;
+}
+#vectorCanvas{width:100%;height:400px;border-radius:8px;background:rgba(0,0,0,.4);cursor:crosshair}
+.vector-controls{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.vec-btn{
+  padding:8px 20px;border:1px solid var(--cyan);border-radius:8px;
+  background:rgba(0,212,255,.1);color:var(--cyan);cursor:pointer;font-size:.85rem;
+  transition:all .3s;font-weight:600;
+}
+.vec-btn:hover{background:var(--cyan);color:var(--bg)}
+.vector-legend{display:flex;gap:20px;font-size:.8rem;color:var(--text-dim);margin-top:12px;flex-wrap:wrap}
+.legend-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.similarity-bar{
+  height:6px;border-radius:3px;background:var(--bg);margin-top:4px;overflow:hidden;
+}
+.similarity-fill{height:100%;border-radius:3px;transition:width .8s ease}
+
+/* ============ 向量化过程演示 ============ */
+.embedding-demo{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:32px;margin:30px 0;position:relative;overflow:hidden;
+}
+/* 步骤指示器 */
+.embed-steps{
+  display:flex;align-items:center;justify-content:center;gap:0;
+  flex-wrap:wrap;margin-bottom:24px;
+}
+.embed-step{
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  opacity:.3;transition:all .5s;min-width:120px;
+}
+.embed-step.active{opacity:1}
+.embed-step .step-num{
+  width:32px;height:32px;border-radius:50%;
+  background:var(--bg2);border:2px solid var(--text-dim);
+  display:flex;align-items:center;justify-content:center;
+  font-size:.9rem;font-weight:700;color:var(--text-dim);
+  transition:all .4s;
+}
+.embed-step.active .step-num{
+  border-color:var(--cyan);background:rgba(0,212,255,.15);color:var(--cyan);
+  box-shadow:0 0 16px rgba(0,212,255,.4);transform:scale(1.15);
+}
+.embed-step .step-label{font-size:.75rem;color:var(--text-dim);text-align:center}
+.embed-step.active .step-label{color:var(--cyan)}
+.embed-arrow{color:var(--text-dim);font-size:1.2rem;margin:0 4px;transition:color .3s}
+.embed-step.active~.embed-arrow{color:var(--cyan)}
+
+/* 演示舞台 */
+.embed-stage{
+  min-height:280px;padding:0;background:rgba(0,0,0,.35);border-radius:12px;
+  position:relative;overflow:hidden;
+}
+/* ============ Step1: 聚光灯文字 ============ */
+.stage-text{display:flex;align-items:center;justify-content:center;height:100%;min-height:280px;position:relative}
+.spotlight-text{display:flex;gap:8px;position:relative}
+.spotlight-char{
+  font-size:3rem;font-weight:800;color:var(--text-bright);
+  opacity:0;transform:translateY(40px) scale(.5);
+  transition:all .6s cubic-bezier(.34,1.56,.64,1);
+  text-shadow:0 0 0 transparent;
+}
+.spotlight-char.show{
+  opacity:1;transform:translateY(0) scale(1);
+  text-shadow:0 0 30px rgba(0,212,255,.6),0 0 60px rgba(168,85,247,.3);
+}
+/* 扫描线 */
+.scan-line{
+  position:absolute;top:0;left:0;width:3px;height:100%;
+  background:linear-gradient(180deg,transparent,var(--cyan),transparent);
+  box-shadow:0 0 20px var(--cyan),0 0 40px rgba(0,212,255,.5);
+  opacity:0;pointer-events:none;
+}
+.scan-line.scanning{
+  animation:scan-sweep 1.5s ease-in-out;
+}
+@keyframes scan-sweep{
+  0%{opacity:0;left:0}
+  20%{opacity:1}
+  80%{opacity:1}
+  100%{opacity:0;left:100%}
+}
+/* 底部提示 */
+.stage-hint{
+  position:absolute;bottom:16px;left:50%;transform:translateX(-50%);
+  font-size:.8rem;color:var(--text-dim);opacity:0;
+  transition:opacity .5s;white-space:nowrap;
+}
+.stage-hint.show{opacity:1}
+
+/* ============ Step2: 分词裂变 ============ */
+.stage-tokens{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:280px;gap:20px;position:relative}
+.token-source{
+  font-size:1.4rem;color:var(--text-dim);opacity:.3;
+  text-decoration:line-through;text-decoration-color:var(--red);
+  transition:all .5s;
+}
+.token-burst{display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+.tok-chip{
+  padding:12px 24px;border-radius:12px;font-size:1.5rem;font-weight:700;
+  border:2px solid;opacity:0;transform:translateY(-30px) scale(.3) rotate(-15deg);
+  transition:all .5s cubic-bezier(.34,1.56,.64,1);
+  position:relative;
+}
+.tok-chip.show{opacity:1;transform:translateY(0) scale(1) rotate(0)}
+.tok-chip:nth-child(1){border-color:var(--cyan);color:var(--cyan);background:rgba(0,212,255,.1);box-shadow:0 0 20px rgba(0,212,255,.2)}
+.tok-chip:nth-child(2){border-color:var(--purple);color:var(--purple);background:rgba(168,85,247,.1);box-shadow:0 0 20px rgba(168,85,247,.2)}
+.tok-chip:nth-child(3){border-color:var(--green);color:var(--green);background:rgba(0,255,136,.1);box-shadow:0 0 20px rgba(0,255,136,.2)}
+.tok-chip:nth-child(4){border-color:var(--orange);color:var(--orange);background:rgba(255,140,0,.1);box-shadow:0 0 20px rgba(255,140,0,.2)}
+.tok-chip::after{
+  content:'';position:absolute;inset:-4px;border-radius:14px;
+  border:2px solid transparent;opacity:0;
+  transition:all .3s .3s;
+}
+.tok-chip.show::after{opacity:1;animation:ring-pulse 1.5s infinite}
+@keyframes ring-pulse{0%,100%{transform:scale(1);opacity:.5}50%{transform:scale(1.1);opacity:0}}
+.tok-label{
+  font-size:.75rem;color:var(--text-dim);margin-top:4px;text-align:center;
+}
+/* 分词粒子 */
+.tok-particle{
+  position:absolute;width:4px;height:4px;border-radius:50%;
+  pointer-events:none;opacity:0;
+}
+
+/* ============ Step3: 向量数据流 ============ */
+.stage-vectors{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:280px;gap:16px;padding:20px}
+.vec-grid{display:grid;grid-template-columns:auto 1fr;gap:12px 20px;align-items:center}
+.vec-row{display:flex;align-items:center;gap:12px}
+.vec-token-label{
+  font-size:1.2rem;font-weight:700;padding:6px 14px;border-radius:8px;
+  border:2px solid;min-width:50px;text-align:center;
+}
+.vec-token-label.t1{border-color:var(--cyan);color:var(--cyan);background:rgba(0,212,255,.1)}
+.vec-token-label.t2{border-color:var(--purple);color:var(--purple);background:rgba(168,85,247,.1)}
+.vec-token-label.t3{border-color:var(--green);color:var(--green);background:rgba(0,255,136,.1)}
+.vec-token-label.t4{border-color:var(--orange);color:var(--orange);background:rgba(255,140,0,.1)}
+/* 连接线 */
+.vec-arrow{
+  width:30px;height:2px;background:linear-gradient(90deg,var(--text-dim),var(--cyan));
+  position:relative;opacity:0;transition:opacity .3s;
+}
+.vec-arrow.show{opacity:1}
+.vec-arrow::after{
+  content:'';position:absolute;right:-4px;top:-3px;
+  width:0;height:0;border-left:6px solid var(--cyan);
+  border-top:4px solid transparent;border-bottom:4px solid transparent;
+}
+/* 向量数字流 */
+.vec-stream{display:flex;gap:4px;flex-wrap:wrap;max-width:500px}
+.vs-num{
+  font-family:'Consolas',monospace;font-size:.75rem;font-weight:600;
+  padding:3px 8px;border-radius:4px;background:rgba(0,212,255,.06);
+  color:var(--cyan);border:1px solid rgba(0,212,255,.15);
+  opacity:0;transform:translateY(8px);
+  transition:all .25s;
+}
+.vs-num.show{opacity:1;transform:translateY(0)}
+.vs-bracket{font-size:1rem;color:var(--text-dim);align-self:center}
+/* 合并动画 */
+.merge-arrow{
+  font-size:1.2rem;color:var(--cyan);text-align:center;
+  opacity:0;transition:opacity .5s;
+}
+.merge-arrow.show{opacity:1}
+.final-vec{
+  font-family:'Consolas',monospace;font-size:.8rem;color:var(--green);
+  padding:8px 16px;border-radius:8px;background:rgba(0,255,136,.08);
+  border:1px solid rgba(0,255,136,.2);text-align:center;
+  opacity:0;transform:scale(.8);transition:all .5s;
+}
+.final-vec.show{opacity:1;transform:scale(1)}
+
+/* ============ Step4: 空间定位 ============ */
+.stage-space{position:relative;height:100%;min-height:280px;overflow:hidden}
+#embedSpaceCanvas{width:100%;height:280px;display:block}
+
+/* ============ 检索流程 ============ */
+.retrieval-flow{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:30px 0}
+.retrieval-panel{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;
+}
+.retrieval-panel h4{color:var(--cyan);margin-bottom:16px;font-size:1.1rem}
+.query-box{
+  padding:12px 16px;background:rgba(0,212,255,.1);border:1px solid var(--cyan);
+  border-radius:8px;color:var(--cyan);font-size:.9rem;margin-bottom:16px;
+}
+.result-item{
+  display:flex;align-items:center;gap:12px;padding:10px 14px;
+  background:rgba(0,0,0,.3);border-radius:8px;margin-bottom:8px;
+  transition:all .3s;border-left:3px solid transparent;
+}
+.result-item.matched{border-left-color:var(--green);background:rgba(0,255,136,.05)}
+.result-item .score{font-family:'Consolas',monospace;font-size:.8rem;color:var(--text-dim)}
+.result-item .score.high{color:var(--green)}
+.result-item .score.mid{color:var(--yellow)}
+.result-item .score.low{color:var(--text-dim)}
+
+/* ============ 重排序动画 ============ */
+.rerank-demo{margin:30px 0}
+.rerank-list{display:flex;flex-direction:column;gap:8px}
+.rerank-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 20px;background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;transition:all .5s cubic-bezier(.4,0,.2,1);
+}
+.rerank-item .rank{font-size:1.5rem;font-weight:700;color:var(--text-dim);width:40px}
+.rerank-item .content{flex:1;margin:0 16px}
+.rerank-item .score-bar{width:120px;height:8px;background:var(--bg);border-radius:4px;overflow:hidden}
+.rerank-item .score-fill{height:100%;border-radius:4px;transition:width .5s}
+.rerank-item.top{border-color:var(--green);box-shadow:0 0 20px rgba(0,255,136,.1)}
+.rerank-item.top .rank{color:var(--green)}
+
+/* ============ 生成动画 ============ */
+.generation-demo{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:32px;margin:30px 0;
+}
+.gen-context{
+  padding:16px;background:rgba(168,85,247,.08);border:1px dashed var(--purple);
+  border-radius:8px;margin-bottom:20px;font-size:.85rem;color:var(--text-dim);
+}
+.gen-context .ctx-label{color:var(--purple);font-weight:600;margin-bottom:8px}
+.gen-output{
+  font-size:1rem;line-height:1.9;color:var(--text-bright);
+  min-height:120px;padding:20px;background:rgba(0,212,255,.05);
+  border:1px solid var(--cyan);border-radius:8px;
+}
+.gen-cursor{display:inline-block;width:2px;height:1.2em;background:var(--cyan);animation:blink .8s infinite;vertical-align:text-bottom}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+.gen-btn{
+  padding:10px 28px;border:none;border-radius:8px;
+  background:var(--grad-cp);color:var(--bg);font-size:1rem;font-weight:700;
+  cursor:pointer;transition:transform .2s;margin-top:16px;
+}
+.gen-btn:hover{transform:scale(1.05)}
+
+/* ============ 项目卡片 ============ */
+.project-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px;margin:30px 0}
+.project-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:24px;transition:all .3s;position:relative;overflow:hidden;
+}
+.project-card::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:3px;
+  background:var(--grad-cp);transform:scaleX(0);transition:transform .4s;transform-origin:left;
+}
+.project-card:hover::after{transform:scaleX(1)}
+.project-card:hover{transform:translateY(-4px);border-color:var(--cyan);box-shadow:0 8px 30px rgba(0,212,255,.08)}
+.project-card .proj-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.project-card .proj-icon{font-size:1.8rem}
+.project-card h4{font-size:1.1rem;color:var(--text-bright)}
+.project-card .proj-stars{font-size:.75rem;color:var(--yellow)}
+.project-card p{font-size:.85rem;color:var(--text-dim);margin-bottom:12px}
+.project-card .proj-tags{display:flex;gap:6px;flex-wrap:wrap}
+.proj-tag{padding:3px 10px;border-radius:99px;font-size:.7rem;font-weight:600}
+.tag-framework{background:rgba(0,212,255,.12);color:var(--cyan)}
+.tag-platform{background:rgba(168,85,247,.12);color:var(--purple)}
+.tag-library{background:rgba(0,255,136,.12);color:var(--green)}
+.tag-tool{background:rgba(255,140,0,.12);color:var(--orange)}
+
+/* ============ 总结 ============ */
+.summary-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;margin:30px 0}
+.summary-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:28px;display:flex;gap:16px;align-items:flex-start;
+}
+.summary-card .num{
+  font-size:2rem;font-weight:800;
+  background:var(--grad-cp);-webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  flex-shrink:0;
+}
+.summary-card h4{color:var(--text-bright);margin-bottom:4px}
+.summary-card p{font-size:.9rem;color:var(--text-dim)}
+
+/* ============ Footer ============ */
+footer{padding:60px 0 30px;text-align:center;border-top:1px solid var(--border);margin-top:40px}
+footer p{color:var(--text-dim);font-size:.85rem}
+footer .footer-links{display:flex;gap:20px;justify-content:center;margin-bottom:16px}
+footer .footer-links a{color:var(--cyan);text-decoration:none;font-size:.85rem}
+
+/* ============ 响应式 ============ */
+@media(max-width:768px){
+  #hero h1{font-size:2.5rem}
+  .section-title{font-size:1.8rem}
+  .problem-grid,.retrieval-flow,.summary-grid{grid-template-columns:1fr}
+  nav .nav-links{display:none}
+  .hero-stats{flex-direction:column;gap:16px}
+}
+</style>
+</head>
+<body>
+
+<!-- 开场动画 -->
+<div class="intro-overlay" id="introOverlay">
+  <div class="intro-bg">
+    <canvas class="intro-particles" id="introParticles"></canvas>
+  </div>
+  <div class="intro-content">
+    <div class="intro-line" id="introLine">知识分享系列 · 2026</div>
+    <div class="intro-title" id="introTitle">关注 Tao 同学！</div>
+    <div class="intro-subtitle" id="introSubtitle">RAG 全流程拆解：从文档到大模型回答</div>
+    <div class="intro-cta" id="introCta">
+      <button class="cta-btn" id="introStart">开始观看</button>
+      <span class="cta-text">或等待自动开始</span>
+    </div>
+  </div>
+  <div class="intro-skip" id="introSkip">跳过 ›</div>
+</div>
+
+<!-- 结尾动画 -->
+<div class="outro-overlay" id="outroOverlay">
+  <div class="outro-bg"></div>
+  <div class="outro-close" id="outroClose">✕</div>
+  <div class="outro-content">
+    <div class="outro-title">关注 Tao 同学！</div>
+    <div class="outro-subtitle">更多 AI 知识分享，持续更新中</div>
+    <div class="outro-links">
+      <a class="outro-link" href="https://github.com/PoseZhaoyutao/zhimian-video-studio" target="_blank">GitHub 仓库</a>
+      <a class="outro-link" href="https://github.com/PoseZhaoyutao/zhimian-video-studio/tree/main/knowledge-sharing" target="_blank">本期网页源码</a>
+    </div>
+    <div class="outro-repo">
+      仓库地址：<code>github.com/PoseZhaoyutao/zhimian-video-studio</code><br>
+      知识分享目录：<code>knowledge-sharing/</code>
+    </div>
+  </div>
+</div>
+
+<canvas id="particles"></canvas>
+
+<!-- 导航 -->
+<nav>
+  <div class="nav-inner">
+    <div class="logo">RAG 拆解</div>
+    <ul class="nav-links">
+      <li><a href="#problem">为什么需要</a></li>
+      <li><a href="#pipeline">架构总览</a></li>
+      <li><a href="#chunking">文档切分</a></li>
+      <li><a href="#embedding">向量化</a></li>
+      <li><a href="#retrieval">检索</a></li>
+      <li><a href="#rerank">重排序</a></li>
+      <li><a href="#generation">生成</a></li>
+      <li><a href="#projects">生态项目</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section id="hero">
+  <div class="container">
+    <div class="hero-badge">知识分享 · AI前沿</div>
+    <h1>RAG 全流程拆解</h1>
+    <p class="subtitle">从文档到大模型回答的完整链路</p>
+    <p class="desc">Retrieval-Augmented Generation：让大模型用你的私有数据回答问题，告别幻觉与知识截止</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num" data-target="6">0</div><div class="label">核心步骤</div></div>
+      <div class="hero-stat"><div class="num" data-target="8">0</div><div class="label">推荐项目</div></div>
+      <div class="hero-stat"><div class="num" data-target="100">0</div><div class="label">% 可视化</div></div>
+    </div>
+  </div>
+  <div class="scroll-hint">↓ 向下滚动开始</div>
+</section>
+
+<!-- 问题 -->
+<section id="problem">
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-num">PROBLEM</div>
+      <h2 class="section-title">为什么需要 RAG？</h2>
+      <p class="section-subtitle">大语言模型很强，但有三个致命弱点。RAG 是目前最务实的解决方案。</p>
+    </div>
+    <div class="problem-grid">
+      <div class="problem-card reveal-s">
+        <div class="icon">🎭</div>
+        <h3>幻觉问题</h3>
+        <p>模型会一本正经地编造不存在的事实。问它冷门领域的问题，它可能生成看似合理但完全错误的内容。</p>
+        <span class="tag tag-red">高频出现</span>
+      </div>
+      <div class="problem-card reveal-s">
+        <div class="icon">📅</div>
+        <h3>知识截止</h3>
+        <p>训练数据有截止日期。今天的新闻、最新的文档、你的私有数据，模型统统不知道。</p>
+        <span class="tag tag-orange">无法避免</span>
+      </div>
+      <div class="problem-card reveal-s">
+        <div class="icon">🔒</div>
+        <h3>私有数据</h3>
+        <p>企业内部文档、个人笔记、行业专有知识——这些数据从未进入模型训练集，模型无法回答相关问题。</p>
+        <span class="tag tag-yellow">刚需场景</span>
+      </div>
+    </div>
+
+    <!-- 幻觉演示：多成因诊断 + RAG对比 -->
+    <div class="hallucination-demo reveal">
+      <h3 style="color:var(--text-bright);margin-bottom:8px">🎭 幻觉的多成因诊断：为什么大模型会编造事实？</h3>
+      <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:20px">
+        幻觉不是单一原因造成的。模型架构、训练数据、知识截止、缺乏事实核查、私有数据缺失——任何一个都可能导致编造。
+        下面展示5种主要成因，以及 RAG 如何从根源解决。<span style="color:var(--cyan)">进入视口后自动轮播演示。</span>
+      </p>
+      <div class="hallu-question">
+        <span class="q-icon">❓</span>
+        <span class="q-text" id="causeQuestion">问题：我们公司2025年Q3的新产品发布计划是什么？</span>
+      </div>
+      <div class="hallu-layout">
+        <!-- 左侧：成因列表 -->
+        <div class="cause-list" id="causeList">
+          <div class="cause-item active" data-cause="0">
+            <span class="cause-icon">📚</span>
+            <div class="cause-body">
+              <h4>训练数据局限</h4>
+              <p>模型只知道训练时见过的内容</p>
+            </div>
+          </div>
+          <div class="cause-item" data-cause="1">
+            <span class="cause-icon">📅</span>
+            <div class="cause-body">
+              <h4>知识截止</h4>
+              <p>训练数据有截止日期，新信息不知道</p>
+            </div>
+          </div>
+          <div class="cause-item" data-cause="2">
+            <span class="cause-icon">🔒</span>
+            <div class="cause-body">
+              <h4>私有数据缺失</h4>
+              <p>企业内部文档从未进入训练集</p>
+            </div>
+          </div>
+          <div class="cause-item" data-cause="3">
+            <span class="cause-icon">🎲</span>
+            <div class="cause-body">
+              <h4>概率生成本质</h4>
+              <p>模型本质是预测下一个token，不是检索事实</p>
+            </div>
+          </div>
+          <div class="cause-item" data-cause="4">
+            <span class="cause-icon">🔍</span>
+            <div class="cause-body">
+              <h4>无事实核查</h4>
+              <p>生成过程中没有外部事实校验机制</p>
+            </div>
+          </div>
+        </div>
+        <!-- 右侧：对比区域 -->
+        <div class="compare-area">
+          <div class="compare-card no-rag">
+            <div class="compare-label">❌ 无 RAG：模型编造回答</div>
+            <div class="compare-text" id="noRagText"></div>
+          </div>
+          <div class="compare-card with-rag">
+            <div class="compare-label">✅ 有 RAG：基于事实回答</div>
+            <div class="compare-text" id="withRagText"></div>
+          </div>
+        </div>
+      </div>
+      <!-- RAG解决方案总结 -->
+      <div class="rag-solution">
+        <h4>🛡️ RAG 如何从根源解决幻觉？</h4>
+        <div class="sol-grid">
+          <div class="sol-item"><span class="check">✓</span>检索外部文档提供事实依据</div>
+          <div class="sol-item"><span class="check">✓</span>实时获取最新信息，突破知识截止</div>
+          <div class="sol-item"><span class="check">✓</span>接入私有数据，回答企业内部问题</div>
+          <div class="sol-item"><span class="check">✓</span>约束模型仅基于上下文生成</div>
+          <div class="sol-item"><span class="check">✓</span>引用追溯，答案可验证</div>
+          <div class="sol-item"><span class="check">✓</span>从"凭记忆回答"变成"查资料回答"</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="reveal" style="margin-top:40px;text-align:center;padding:24px;background:var(--surface);border-radius:16px;border:1px solid var(--border)">
+      <p style="font-size:1.1rem;color:var(--text-bright)">
+        <span style="color:var(--cyan);font-weight:700">RAG 的核心思路：</span>
+        不改模型本身，而是在回答前先<strong style="color:var(--green)">检索</strong>相关文档，
+        把文档作为<strong style="color:var(--purple)">上下文</strong>喂给模型，让它<strong style="color:var(--orange)">基于事实</strong>回答。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- 架构总览 -->
+<section id="pipeline">
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-num">ARCHITECTURE</div>
+      <h2 class="section-title">RAG 架构总览</h2>
+      <p class="section-subtitle">六个阶段，从原始文档到最终回答。点击任意步骤查看详情。</p>
+    </div>
+    <div class="pipeline-wrap reveal">
+      <svg class="pipeline-svg" viewBox="0 0 1100 200" xmlns="http://www.w3.org/2000/svg">
+        <!-- 连接线 -->
+        <line class="pipe-line" x1="100" y1="80" x2="240" y2="80" stroke="#00d4ff" stroke-width="2" opacity=".5"/>
+        <line class="pipe-line" x1="300" y1="80" x2="440" y2="80" stroke="#a855f7" stroke-width="2" opacity=".5"/>
+        <line class="pipe-line" x1="500" y1="80" x2="640" y2="80" stroke="#00ff88" stroke-width="2" opacity=".5"/>
+        <line class="pipe-line" x1="700" y1="80" x2="840" y2="80" stroke="#ff8c00" stroke-width="2" opacity=".5"/>
+        <line class="pipe-line" x1="900" y1="80" x2="1040" y2="80" stroke="#ff4466" stroke-width="2" opacity=".5"/>
+        <!-- 步骤圆圈 -->
+        <g class="pipe-step" data-step="1">
+          <circle cx="70" cy="80" r="30" fill="#111638" stroke="#00d4ff" stroke-width="2"/>
+          <text x="70" y="76" text-anchor="middle" fill="#00d4ff" font-size="14" font-weight="bold">文档</text>
+          <text x="70" y="92" text-anchor="middle" fill="#00d4ff" font-size="10">切分</text>
+          <text x="70" y="135" text-anchor="middle" fill="#8892b0" font-size="11">Chunking</text>
+        </g>
+        <g class="pipe-step" data-step="2">
+          <circle cx="270" cy="80" r="30" fill="#111638" stroke="#a855f7" stroke-width="2"/>
+          <text x="270" y="76" text-anchor="middle" fill="#a855f7" font-size="14" font-weight="bold">向量</text>
+          <text x="270" y="92" text-anchor="middle" fill="#a855f7" font-size="10">化</text>
+          <text x="270" y="135" text-anchor="middle" fill="#8892b0" font-size="11">Embedding</text>
+        </g>
+        <g class="pipe-step" data-step="3">
+          <circle cx="470" cy="80" r="30" fill="#111638" stroke="#00ff88" stroke-width="2"/>
+          <text x="470" y="76" text-anchor="middle" fill="#00ff88" font-size="14" font-weight="bold">向量</text>
+          <text x="470" y="92" text-anchor="middle" fill="#00ff88" font-size="10">存储</text>
+          <text x="470" y="135" text-anchor="middle" fill="#8892b0" font-size="11">Vector DB</text>
+        </g>
+        <g class="pipe-step" data-step="4">
+          <circle cx="670" cy="80" r="30" fill="#111638" stroke="#ff8c00" stroke-width="2"/>
+          <text x="670" y="76" text-anchor="middle" fill="#ff8c00" font-size="14" font-weight="bold">检索</text>
+          <text x="670" y="92" text-anchor="middle" fill="#ff8c00" font-size="10">匹配</text>
+          <text x="670" y="135" text-anchor="middle" fill="#8892b0" font-size="11">Retrieval</text>
+        </g>
+        <g class="pipe-step" data-step="5">
+          <circle cx="870" cy="80" r="30" fill="#111638" stroke="#ff4466" stroke-width="2"/>
+          <text x="870" y="76" text-anchor="middle" fill="#ff4466" font-size="14" font-weight="bold">重排</text>
+          <text x="870" y="92" text-anchor="middle" fill="#ff4466" font-size="10">序</text>
+          <text x="870" y="135" text-anchor="middle" fill="#8892b0" font-size="11">Reranking</text>
+        </g>
+        <g class="pipe-step" data-step="6">
+          <circle cx="1070" cy="80" r="30" fill="#111638" stroke="#ffd700" stroke-width="2"/>
+          <text x="1070" y="76" text-anchor="middle" fill="#ffd700" font-size="14" font-weight="bold">生成</text>
+          <text x="1070" y="92" text-anchor="middle" fill="#ffd700" font-size="10">回答</text>
+          <text x="1070" y="135" text-anchor="middle" fill="#8892b0" font-size="11">Generation</text>
+        </g>
+        <!-- 用户查询入口 -->
+        <text x="670" y="180" text-anchor="middle" fill="#8892b0" font-size="11">↑ 用户查询从此处进入</text>
+        <line x1="670" y1="170" x2="670" y2="115" stroke="#8892b0" stroke-width="1" stroke-dasharray="3 3" opacity=".5"/>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- 文档切分 -->
+<section id="chunking">
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-num">STEP 1</div>
+      <h2 class="section-title">文档切分（Chunking）</h2>
+      <p class="section-subtitle">把长文档拆成小段。切分策略直接决定检索精度——切太大检索不精确，切太小丢失上下文。</p>
+    </div>
+    <div class="chunk-demo reveal">
+      <div class="chunk-strategy">
+        <button class="strategy-btn active" data-strategy="fixed">固定长度切分</button>
+        <button class="strategy-btn" data-strategy="sentence">按句子切分</button>
+        <button class="strategy-btn" data-strategy="semantic">语义切分</button>
+        <button class="strategy-btn" data-strategy="recursive">递归切分</button>
+      </div>
+      <div class="chunk-original" id="chunkOriginal">
+        人工智能（AI）是计算机科学的一个分支，致力于创建能够执行通常需要人类智能的任务的系统。机器学习是AI的核心子领域，通过算法让计算机从数据中学习模式。深度学习是机器学习的子集，使用多层神经网络处理大规模数据。大语言模型（LLM）是深度学习的最新成果，通过在海量文本上训练，获得了语言理解和生成能力。然而，LLM存在幻觉和知识截止问题，RAG通过检索外部知识来解决这些局限。
+      </div>
+      <div class="chunks-container" id="chunksContainer"></div>
+    </div>
+    <div class="problem-grid reveal" style="margin-top:30px">
+      <div class="problem-card">
+        <div class="icon">📏</div>
+        <h3>Chunk Size</h3>
+        <p>通常 256-1024 tokens。太小丢失上下文，太大检索噪声多。</p>
+        <span class="tag tag-yellow">关键参数</span>
+      </div>
+      <div class="problem-card">
+        <div class="icon">🔗</div>
+        <h3>Overlap</h3>
+        <p>相邻块重叠 50-200 tokens，避免句子被截断导致语义丢失。</p>
+        <span class="tag tag-orange">防截断</span>
+      </div>
+      <div class="problem-card">
+        <div class="icon">🧠</div>
+        <h3>语义保持</h3>
+        <p>优先按段落、标题、句子边界切分，保持每块的语义完整性。</p>
+        <span class="tag tag-red">质量核心</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 向量化 -->
+<section id="embedding">
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-num">STEP 2</div>
+      <h2 class="section-title">向量化（Embedding）</h2>
+      <p class="section-subtitle">把文本变成高维向量。语义相近的文本在向量空间中距离也近——这是RAG能"理解"语义的基础。</p>
+    </div>
+    <div class="embedding-demo reveal">
+      <h3 style="color:var(--text-bright);margin-bottom:8px;text-align:center">🚀 向量化过程演示：以"我爱中国"为例</h3>
+      <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:20px;text-align:center">
+        文本如何变成向量？观察下面的四步过程——进入视口后自动播放，循环演示。
+      </p>
+      <div class="embed-steps" id="embedSteps">
+        <div class="embed-step active" data-step="0"><div class="step-num">1</div><div class="step-label">原始文本</div></div>
+        <span class="embed-arrow">→</span>
+        <div class="embed-step" data-step="1"><div class="step-num">2</div><div class="step-label">分词 Tokenize</div></div>
+        <span class="embed-arrow">→</span>
+        <div class="embed-step" data-step="2"><div class="step-num">3</div><div class="step-label">向量化 Embed</div></div>
+        <span class="embed-arrow">→</span>
+        <div class="embed-step" data-step="3"><div class="step-num">4</div><div class="step-label">空间定位</div></div>
+      </div>
+      <div class="embed-stage" id="embedStage">
+        <!-- 内容由JS动态填充 -->
+      </div>
+    </div>
+    <div class="vector-space-wrap reveal">
+      <div class="vector-controls">
+        <button class="vec-btn" id="addPointBtn">+ 添加文档向量</button>
+        <button class="vec-btn" id="queryBtn" style="border-color:var(--orange);background:rgba(255,140,0,.1);color:var(--orange)">发起查询</button>
+        <button class="vec-btn" id="resetVecBtn" style="border-color:var(--text-dim);background:transparent;color:var(--text-dim)">重置</button>
+        <span style="font-size:.8rem;color:var(--text-dim);margin-left:auto">每个点代表一段文档，距离越近语义越相似</span>
+      </div>
+      <canvas id="vectorCanvas"></canvas>
+      <div class="vector-legend">
+        <span><span class="legend-dot" style="background:#00d4ff"></span>AI技术文档</span>
+        <span><span class="legend-dot" style="background:#a855f7"></span>编程教程</span>
+        <span><span class="legend-dot" style="background:#00ff88"></span>产品设计</span>
+        <span><span class="legend-dot" style="background:#ff8c00"></span>查询向量</span>
+        <span><span class="legend-dot" style="background:#ff4466"></span>匹配结果</span>
+      </div>
+    </div>
+    <div class="problem-grid reveal" style="margin-top:30px">
+      <div class="problem-card">
+        <div class="icon">🔢</div>
+        <h3>维度</h3>
+        <p>常见 768/1024/1536 维。维度越高表达力越强，但计算和存储成本也越高。</p>
+        <span class="tag tag-yellow">768-1536</span>
+      </div>
+      <div class="problem-card">
+        <div class="icon">🤖</div>
+        <h3>Embedding模型</h3>
+        <p>BGE、text-embedding-ada-002、E5等。中文场景首选BGE系列。</p>
+        <span class="tag tag-red">选型关键</span>
+      </div>
+      <div class="problem-card">
+        <div class="icon">📐</div>
+        <h3>相似度度量</h3>
+        <p>余弦相似度最常用。向量夹角越小，语义越接近。</p>
+        <span class="tag tag-orange">Cosine</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 检索 -->
+<section id="retrieval">
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-num">STEP 3-4</div>
+      <h2 class="section-title">向量存储与检索</h2>
+      <p class="section-subtitle">把向量存入专用数据库，查询时用向量相似度找最相关的文档块。</p>
+    </div>
+    <div class="retrieval-flow">
+      <div class="retrieval-panel reveal-l">
+        <h4>📥 向量存储</h4>
+        <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:16px">向量数据库专为高维相似度搜索设计，支持百万级向量毫秒检索。</p>
+        <div style="display:grid;gap:8px">
+          <div class="result-item" style="border-left-color:var(--cyan)">
+            <span style="color:var(--cyan);font-weight:600">Milvus</span>
+            <span class="score">开源 · 分布式 · 十亿级</span>
+          </div>
+          <div class="result-item" style="border-left-color:var(--purple)">
+            <span style="color:var(--purple);font-weight:600">Qdrant</span>
+            <span class="score">Rust · 高性能 · 过滤</span>
+          </div>
+          <div class="result-item" style="border-left-color:var(--green)">
+            <span style="color:var(--green);font-weight:600">Chroma</span>
+            <span class="score">轻量 · Python · 易上手</span>
+          </div>
+          <div class="result-item" style="border-left-color:var(--orange)">
+            <span style="color:var(--orange);font-weight:600">FAISS</span>
+            <span class="score">Meta · GPU · 纯检索</span>
+          </div>
+          <div class="result-item" style="border-left-color:var(--yellow)">
+            <span style="color:var(--yellow);font-weight:600">pgvector</span>
+            <span class="score">PostgreSQL · SQL生态</span>
+          </div>
+        </div>
+      </div>
+      <div class="retrieval-panel reveal-r">
+        <h4>🔍 检索过程</h4>
+        <div class="query-box">
+          ❓ 用户查询："什么是Transformer的注意力机制？"
+        </div>
+        <div id="retrievalResults">
+          <div class="result-item" data-score="0.92">
+            <span>注意力机制通过Q/K/V矩阵计算...</span>
+            <span class="score high">0.92</span>
+          </div>
+          <div class="result-item" data-score="0.85">
+            <span>Transformer使用多头自注意力...</span>
+            <span class="score high">0.85</span>
+          </div>
+          <div class="result-item" data-score="0.71">
+            <span>Self-attention的缩放点积公式...</span>
+            <span class="score mid">0.71</span>
+          </div>
+          <div class="result-item" data-score="0.63">
+            <span>神经网络中的注意力机制起源...</span>
+            <span class="score mid">0.63</span>
+          </div>
+          <div class="result-item" data-score="0.38">
+            <span>CNN与Transformer的对比分析...</span>
+            <span class="score low">0.38</span>
+          </div>
+          <div class="result-item" data-score="0.21">
+            <span>Python列表推导式入门教程...</span>
+            <span class="score low">0.21</span>
+          </div>
+        </div>
+        <div style="margin-top:12px;font-size:.8rem;color:var(--text-dim)">
+          Top-K=4：取相似度最高的4条作为候选（绿色高亮）
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 重排序 -->
+<section id="rerank">
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-num">STEP 5</div>
+      <h2 class="section-title">重排序（Reranking）</h2>
+      <p class="section-subtitle">向量检索快但粗。用更精确的模型对 Top-K 结果重新打分，把最相关的排到最前面。</p>
+    </div>
+    <div class="rerank-demo reveal">
+      <div style="display:flex;gap:12px;margin-bottom:20px">
+        <button class="vec-btn" id="rerankBtn">▶ 执行重排序</button>
+        <span style="font-size:.8rem;color:var(--text-dim);align-self:center">点击查看 Cross-Encoder 重排序效果</span>
+      </div>
+      <div class="rerank-list" id="rerankList">
+        <div class="rerank-item" data-original-rank="1" data-new-rank="2">
+          <span class="rank">1</span>
+          <span class="content">注意力机制通过Q/K/V矩阵计算token间的关系</span>
+          <div class="score-bar"><div class="score-fill" style="width:92%;background:var(--cyan)"></div></div>
+        </div>
+        <div class="rerank-item" data-original-rank="2" data-new-rank="1">
+          <span class="rank">2</span>
+          <span class="content">Transformer使用多头自注意力并行处理序列</span>
+          <div class="score-bar"><div class="score-fill" style="width:96%;background:var(--green)"></div></div>
+        </div>
+        <div class="rerank-item" data-original-rank="3" data-new-rank="3">
+          <span class="rank">3</span>
+          <span class="content">Self-attention的缩放点积公式详解</span>
+          <div class="score-bar"><div class="score-fill" style="width:78%;background:var(--yellow)"></div></div>
+        </div>
+        <div class="rerank-item" data-original-rank="4" data-new-rank="4">
+          <span class="rank">4</span>
+          <span class="content">神经网络中的注意力机制起源与发展</span>
+          <div class="score-bar"><div class="score-fill" style="width:55%;background:var(--orange)"></div></div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:30px;padding:24px;background:var(--surface);border-radius:16px;border:1px solid var(--border)" class="reveal">
+      <h4 style="color:var(--cyan);margin-bottom:12px">为什么需要重排序？</h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;font-size:.9rem">
+        <div>
+          <p style="color:var(--text-dim);font-weight:600;margin-bottom:6px">向量检索（Bi-Encoder）</p>
+          <p style="color:var(--text-dim)">独立编码query和doc → 计算余弦相似度</p>
+          <p style="color:var(--green)">✓ 快（毫秒级）</p>
+          <p style="color:var(--red)">✗ 粗（独立编码丢失交互信息）</p>
+        </div>
+        <div>
+          <p style="color:var(--text-dim);font-weight:600;margin-bottom:6px">重排序（Cross-Encoder）</p>
+          <p style="color:var(--text-dim)">query+doc拼接输入 → 联合编码打分</p>
+          <p style="color:var(--green)">✓ 精确（捕获深层语义交互）</p>
+          <p style="color:var(--red)">✗ 慢（只能对少量候选打分）</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 生成 -->
+<section id="generation">
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-num">STEP 6</div>
+      <h2 class="section-title">生成回答（Generation）</h2>
+      <p class="section-subtitle">把检索到的文档作为上下文，和用户问题一起喂给大模型，让它基于事实回答。</p>
+    </div>
+    <div class="generation-demo reveal">
+      <div class="gen-context">
+        <div class="ctx-label">📋 检索到的上下文（Top-3 文档块）：</div>
+        <div style="margin-bottom:8px">[1] Transformer使用多头自注意力并行处理序列，每个头关注不同的语义子空间...</div>
+        <div style="margin-bottom:8px">[2] 注意力机制通过Q/K/V矩阵计算token间的关系，公式为 Attention(Q,K,V)=softmax(QK^T/√d)V...</div>
+        <div>[3] Self-attention的缩放点积公式中，√d用于防止点积过大导致梯度消失...</div>
+      </div>
+      <div style="margin-bottom:12px;color:var(--orange);font-size:.9rem">
+        ❓ 用户问题：什么是Transformer的注意力机制？
+      </div>
+      <div class="gen-output" id="genOutput">
+        <span id="genText"></span><span class="gen-cursor" id="genCursor"></span>
+      </div>
+      <button class="gen-btn" id="genBtn">▶ 生成回答</button>
+    </div>
+    <div style="margin-top:30px;padding:24px;background:var(--surface);border-radius:16px;border:1px solid var(--border)" class="reveal">
+      <h4 style="color:var(--cyan);margin-bottom:12px">Prompt 模板示例</h4>
+      <pre style="background:rgba(0,0,0,.4);padding:16px;border-radius:8px;font-size:.85rem;color:var(--green);font-family:Consolas,monospace;overflow-x:auto;line-height:1.8">你是一个知识助手。请<strong style="color:var(--cyan)">仅基于</strong>以下上下文回答问题。
+如果上下文中没有相关信息，请回答"根据已知信息无法回答"。
+
+<strong style="color:var(--purple)">上下文：</strong>
+{retrieved_documents}
+
+<strong style="color:var(--orange)">问题：</strong>{user_question}
+
+<strong style="color:var(--green)">回答：</strong></pre>
+      <p style="margin-top:12px;font-size:.85rem;color:var(--text-dim)">
+        💡 关键：明确要求模型<strong style="color:var(--cyan)">仅基于上下文回答</strong>，这是减少幻觉的核心手段。
+        没有这句话，模型可能无视检索结果，继续编造。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- 生态项目 -->
+<section id="projects">
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-num">ECOSYSTEM</div>
+      <h2 class="section-title">RAG 生态项目推荐</h2>
+      <p class="section-subtitle">从框架到平台，以下是搭建私域知识库值得关注的开源项目。</p>
+    </div>
+    <div class="project-grid">
+      <div class="project-card reveal-s">
+        <div class="proj-header">
+          <span class="proj-icon">🦙</span>
+          <div>
+            <h4>LlamaIndex</h4>
+            <span class="proj-stars">⭐ 35k+</span>
+          </div>
+        </div>
+        <p>最流行的RAG框架。提供数据连接、索引、检索、后处理的完整工具链。支持多种文档源和向量数据库。</p>
+        <div class="proj-tags">
+          <span class="proj-tag tag-framework">框架</span>
+          <span class="proj-tag tag-library">Python</span>
+        </div>
+      </div>
+      <div class="project-card reveal-s">
+        <div class="proj-header">
+          <span class="proj-icon">⛓️</span>
+          <div>
+            <h4>LangChain</h4>
+            <span class="proj-stars">⭐ 88k+</span>
+          </div>
+        </div>
+        <p>LLM应用开发框架。RAG是其核心场景之一，提供文档加载、切分、向量化、检索、生成的全链路组件。</p>
+        <div class="proj-tags">
+          <span class="proj-tag tag-framework">框架</span>
+          <span class="proj-tag tag-library">Python/JS</span>
+        </div>
+      </div>
+      <div class="project-card reveal-s">
+        <div class="proj-header">
+          <span class="proj-icon">🔍</span>
+          <div>
+            <h4>Dify</h4>
+            <span class="proj-stars">⭐ 45k+</span>
+          </div>
+        </div>
+        <p>开源LLM应用开发平台。可视化编排工作流，内置RAG管道，支持知识库管理、多模型切换、API发布。</p>
+        <div class="proj-tags">
+          <span class="proj-tag tag-platform">平台</span>
+          <span class="proj-tag tag-tool">可视化</span>
+        </div>
+      </div>
+      <div class="project-card reveal-s">
+        <div class="proj-header">
+          <span class="proj-icon">⚡</span>
+          <div>
+            <h4>FastGPT</h4>
+            <span class="proj-stars">⭐ 16k+</span>
+          </div>
+        </div>
+        <p>基于LLM的知识库问答系统。开箱即用的RAG平台，支持自动数据预处理、工作流编排、分享部署。</p>
+        <div class="proj-tags">
+          <span class="proj-tag tag-platform">平台</span>
+          <span class="proj-tag tag-tool">开箱即用</span>
+        </div>
+      </div>
+      <div class="project-card reveal-s">
+        <div class="proj-header">
+          <span class="proj-icon">📄</span>
+          <div>
+            <h4>RAGFlow</h4>
+            <span class="proj-stars">⭐ 18k+</span>
+          </div>
+        </div>
+        <p>深度文档理解的RAG引擎。强调文档解析能力，支持复杂排版PDF/Word/Excel的精准切分和引用追溯。</p>
+        <div class="proj-tags">
+          <span class="proj-tag tag-framework">引擎</span>
+          <span class="proj-tag tag-tool">文档解析</span>
+        </div>
+      </div>
+      <div class="project-card reveal-s">
+        <div class="proj-header">
+          <span class="proj-icon">🕸️</span>
+          <div>
+            <h4>GraphRAG (微软)</h4>
+            <span class="proj-stars">⭐ 22k+</span>
+          </div>
+        </div>
+        <p>微软开源的图谱RAG。先从文档抽取知识图谱，再用社区检测做全局摘要检索。解决传统RAG无法回答全局性问题的问题。</p>
+        <div class="proj-tags">
+          <span class="proj-tag tag-framework">引擎</span>
+          <span class="proj-tag tag-library">知识图谱</span>
+        </div>
+      </div>
+      <div class="project-card reveal-s">
+        <div class="proj-header">
+          <span class="proj-icon">🧩</span>
+          <div>
+            <h4>Graphify</h4>
+            <span class="proj-stars">⭐ 新兴项目</span>
+          </div>
+        </div>
+        <p>知识图谱增强的私域知识库工具。将非结构化文档自动转化为结构化图谱，支持实体关系检索和可视化探索。</p>
+        <div class="proj-tags">
+          <span class="proj-tag tag-tool">知识图谱</span>
+          <span class="proj-tag tag-platform">私域知识库</span>
+        </div>
+      </div>
+      <div class="project-card reveal-s">
+        <div class="proj-header">
+          <span class="proj-icon">💬</span>
+          <div>
+            <h4>AnythingLLM</h4>
+            <span class="proj-stars">⭐ 28k+</span>
+          </div>
+        </div>
+        <p>桌面级私有AI助手。支持任意文档拖拽导入，自动构建向量库，本地化运行，适合个人和小团队的私域知识管理。</p>
+        <div class="proj-tags">
+          <span class="proj-tag tag-platform">桌面应用</span>
+          <span class="proj-tag tag-tool">私有化</span>
+        </div>
+      </div>
+      <div class="project-card reveal-s">
+        <div class="proj-header">
+          <span class="proj-icon">🗃️</span>
+          <div>
+            <h4>MaxKB</h4>
+            <span class="proj-stars">⭐ 12k+</span>
+          </div>
+        </div>
+        <p>基于大语言模型和RAG的开源知识库问答系统。支持多模型对接、文档自动切分向量化和快速嵌入到第三方业务系统。</p>
+        <div class="proj-tags">
+          <span class="proj-tag tag-platform">平台</span>
+          <span class="proj-tag tag-tool">企业级</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 总结 -->
+<section id="summary">
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-num">SUMMARY</div>
+      <h2 class="section-title">关键要点</h2>
+      <p class="section-subtitle">RAG不是魔法，是一套工程化的检索+生成流水线。记住这六点。</p>
+    </div>
+    <div class="summary-grid">
+      <div class="summary-card reveal-l">
+        <span class="num">01</span>
+        <div>
+          <h4>切分决定上限</h4>
+          <p>Chunk Size和Overlap是最影响效果的参数。没有银弹，必须针对你的文档类型实验调优。</p>
+        </div>
+      </div>
+      <div class="summary-card reveal-r">
+        <span class="num">02</span>
+        <div>
+          <h4>Embedding模型选对</h4>
+          <p>中文用BGE，英文用E5/ada-002。模型决定了语义理解的粒度，后期很难换。</p>
+        </div>
+      </div>
+      <div class="summary-card reveal-l">
+        <span class="num">03</span>
+        <div>
+          <h4>检索+重排序是标配</h4>
+          <p>向量检索召回粗筛，Cross-Encoder重排精排。两步配合比单步效果好得多。</p>
+        </div>
+      </div>
+      <div class="summary-card reveal-r">
+        <span class="num">04</span>
+        <div>
+          <h4>Prompt约束幻觉</h4>
+          <p>"仅基于上下文回答"这句话必须有。否则模型可能无视检索结果自行编造。</p>
+        </div>
+      </div>
+      <div class="summary-card reveal-l">
+        <span class="num">05</span>
+        <div>
+          <h4>引用追溯提升可信度</h4>
+          <p>让模型标注答案来源（引用哪个文档块），用户可验证，也方便调试。</p>
+        </div>
+      </div>
+      <div class="summary-card reveal-r">
+        <span class="num">06</span>
+        <div>
+          <h4>持续评测闭环</h4>
+          <p>构建测试集，量化检索准确率和生成质量。没有评测的RAG是盲飞。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <div class="footer-links">
+      <a href="#hero">回到顶部</a>
+      <a href="#projects">推荐项目</a>
+    </div>
+    <p>RAG全流程拆解 · 知识分享网页 · 后期配音录制版本</p>
+    <p style="margin-top:4px;font-size:.8rem">使用 TRAE + video-shotcraft 构建</p>
+  </div>
+</footer>
+
+<script>
+// ============ 粒子背景 ============
+(function(){
+  const canvas=document.getElementById('particles');
+  const ctx=canvas.getContext('2d');
+  let W,H,particles=[];
+  function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight}
+  resize();window.addEventListener('resize',resize);
+  const colors=['#00d4ff','#a855f7','#00ff88','#ff8c00'];
+  for(let i=0;i<80;i++){
+    particles.push({
+      x:Math.random()*W,y:Math.random()*H,
+      vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3,
+      r:Math.random()*2+1,
+      c:colors[Math.floor(Math.random()*colors.length)],
+      a:Math.random()*.5+.2
+    });
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    particles.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;
+      if(p.x<0)p.x=W;if(p.x>W)p.x=0;
+      if(p.y<0)p.y=H;if(p.y>H)p.y=0;
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=p.c;ctx.globalAlpha=p.a;ctx.fill();
+    });
+    ctx.globalAlpha=1;
+    //连线
+    for(let i=0;i<particles.length;i++){
+      for(let j=i+1;j<particles.length;j++){
+        const dx=particles[i].x-particles[j].x;
+        const dy=particles[i].y-particles[j].y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d<120){
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x,particles[i].y);
+          ctx.lineTo(particles[j].x,particles[j].y);
+          ctx.strokeStyle='rgba(0,212,255,'+(1-d/120)*.15+')';
+          ctx.lineWidth=.5;ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ============ 幻觉多成因诊断（自动轮播） ============
+(function(){
+  const causes=[
+    {
+      question:'问题：我们公司2025年Q3的新产品发布计划是什么？',
+      noRag:'根据我了解的信息，贵公司2025年Q3计划发布一款基于AI的智能客服产品，预计在8月正式上线，主打多语言支持和情感分析功能。<span class="hallu-marker fake">编造</span>',
+      withRag:'根据检索到的《2025-Q3产品路线图.pdf》：Q3计划发布两款产品——8月发布智能客服v2.0（新增多语言支持），9月发布数据分析平台v1.0。<span class="hallu-marker real">有据可查</span>'
+    },
+    {
+      question:'问题：2025年最新的诺贝尔物理学奖授予了谁？',
+      noRag:'2025年诺贝尔物理学奖授予了John Hopfield和Geoffrey Hinton，以表彰他们在机器学习与神经网络领域的奠基性贡献。<span class="hallu-marker fake">沿用旧知识</span>',
+      withRag:'根据检索到的2025年10月最新诺贝尔奖公告：[检索到最新新闻]。我基于实时检索到的文档回答，而非训练时的旧知识。<span class="hallu-marker real">实时更新</span>'
+    },
+    {
+      question:'问题：我们公司的内部API网关架构是怎样的？',
+      noRag:'贵公司可能采用了Kong或APISIX作为API网关，使用OAuth2.0进行认证，配合Redis做限流...<span class="hallu-marker fake">通用推测</span>',
+      withRag:'根据检索到的内部技术文档《API网关架构设计v3.docx》：公司采用自研网关，基于Go语言开发，使用JWT+RBAC鉴权，MySQL存储路由配置，Kafka做异步日志。<span class="hallu-marker real">精确引用</span>'
+    },
+    {
+      question:'问题：Transformer模型为什么比RNN更适合长序列？',
+      noRag:'Transformer之所以优于RNN，是因为它使用了量子注意力机制，能够同时处理多个平行宇宙中的序列数据...<span class="hallu-marker fake">概率编造</span>',
+      withRag:'根据检索到的《Attention Is All You Need》论文：Transformer使用自注意力机制实现全局依赖建模，支持并行计算，避免了RNN的梯度消失和顺序计算瓶颈。<span class="hallu-marker real">基于原文</span>'
+    },
+    {
+      question:'问题：昨天发布的RFC 9527定义了什么协议？',
+      noRag:'RFC 9527定义了一种新型的量子安全传输协议（QSTP），用于在后量子时代保护网络通信安全...<span class="hallu-marker fake">无核查编造</span>',
+      withRag:'根据检索到的IETF官方文档：RFC 9527的内容为[检索结果]。在未检索到相关文档时，系统如实回答"未找到相关资料"，而非编造。<span class="hallu-marker real">如实回答</span>'
+    }
+  ];
+  const causeItems=document.querySelectorAll('.cause-item');
+  const questionEl=document.getElementById('causeQuestion');
+  const noRagEl=document.getElementById('noRagText');
+  const withRagEl=document.getElementById('withRagText');
+  let idx=0;
+  let autoTimer=null;
+
+  function showCause(i){
+    idx=i;
+    //更新成因高亮
+    causeItems.forEach((item,j)=>item.classList.toggle('active',j===i));
+    //更新问题和回答
+    const c=causes[i];
+    questionEl.textContent=c.question;
+    //淡入动画
+    noRagEl.innerHTML='<span class="fade-in">'+c.noRag+'</span>';
+    withRagEl.innerHTML='<span class="fade-in">'+c.withRag+'</span>';
+  }
+
+  function startAuto(){
+    showCause(0);
+    autoTimer=setInterval(()=>{
+      idx=(idx+1)%causes.length;
+      showCause(idx);
+    },4000);
+  }
+
+  //点击切换
+  causeItems.forEach((item,i)=>{
+    item.addEventListener('click',()=>{
+      if(autoTimer)clearInterval(autoTimer);
+      showCause(i);
+      //3秒后恢复自动
+      setTimeout(startAuto,5000);
+    });
+  });
+
+  const halluObserver=new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting){
+        startAuto();
+      }else{
+        if(autoTimer){clearInterval(autoTimer);autoTimer=null}
+      }
+    });
+  },{threshold:.2});
+  halluObserver.observe(document.querySelector('.hallucination-demo'));
+})();
+
+// ============ 滚动动画 ============
+const observer=new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add('active')});
+},{threshold:.1});
+document.querySelectorAll('.reveal,.reveal-l,.reveal-r,.reveal-s').forEach(el=>observer.observe(el));
+
+// ============ 数字滚动 ============
+const numObserver=new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      const el=e.target;
+      const target=parseInt(el.dataset.target);
+      let cur=0;
+      const step=target/40;
+      const timer=setInterval(()=>{
+        cur+=step;
+        if(cur>=target){cur=target;clearInterval(timer)}
+        el.textContent=Math.floor(cur);
+      },30);
+      numObserver.unobserve(el);
+    }
+  });
+},{threshold:.5});
+document.querySelectorAll('[data-target]').forEach(el=>numObserver.observe(el));
+
+// ============ 流水线步骤交互 ============
+document.querySelectorAll('.pipe-step').forEach(step=>{
+  step.addEventListener('click',()=>{
+    document.querySelectorAll('.pipe-step').forEach(s=>s.classList.remove('active'));
+    step.classList.add('active');
+    const stepNum=step.dataset.step;
+    const targets=['#chunking','#embedding','#retrieval','#retrieval','#rerank','#generation'];
+    const target=document.querySelector(targets[stepNum-1]);
+    if(target)target.scrollIntoView({behavior:'smooth'});
+  });
+});
+
+// ============ 文档切分动画 ============
+const chunkStrategies={
+  fixed:['人工智能（AI）是计算机科学的','一个分支，致力于创建能够','执行通常需要人类智能的任务的','系统。机器学习是AI的核心','子领域，通过算法让计算机从','数据中学习模式。深度学习是','机器学习的子集，使用多层神','经网络处理大规模数据。'],
+  sentence:['人工智能是计算机科学的一个分支，致力于创建能够执行通常需要人类智能的任务的系统。','机器学习是AI的核心子领域，通过算法让计算机从数据中学习模式。','深度学习是机器学习的子集，使用多层神经网络处理大规模数据。','大语言模型（LLM）是深度学习的最新成果，通过在海量文本上训练，获得了语言理解和生成能力。','然而，LLM存在幻觉和知识截止问题，RAG通过检索外部知识来解决这些局限。'],
+  semantic:['人工智能（AI）是计算机科学的一个分支，致力于创建能够执行通常需要人类智能的任务的系统。','机器学习是AI的核心子领域，通过算法让计算机从数据中学习模式。深度学习是机器学习的子集，使用多层神经网络处理大规模数据。','大语言模型（LLM）是深度学习的最新成果，通过在海量文本上训练，获得了语言理解和生成能力。','然而，LLM存在幻觉和知识截止问题，RAG通过检索外部知识来解决这些局限。'],
+  recursive:['人工智能（AI）是计算机科学的一个分支','致力于创建能够执行通常需要人类智能的任务的系统','机器学习是AI的核心子领域','通过算法让计算机从数据中学习模式','深度学习是机器学习的子集','使用多层神经网络处理大规模数据','大语言模型（LLM）是深度学习的最新成果','通过在海量文本上训练获得了语言理解和生成能力','然而LLM存在幻觉和知识截止问题','RAG通过检索外部知识来解决这些局限']
+};
+function showChunks(strategy){
+  const container=document.getElementById('chunksContainer');
+  container.innerHTML='';
+  const chunks=chunkStrategies[strategy];
+  chunks.forEach((text,i)=>{
+    const div=document.createElement('div');
+    div.className='chunk-box';
+    div.textContent=text;
+    container.appendChild(div);
+    setTimeout(()=>div.classList.add('show'),i*150+100);
+  });
+}
+document.querySelectorAll('.strategy-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.strategy-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    showChunks(btn.dataset.strategy);
+  });
+});
+// 初始加载
+const chunkObserver=new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      showChunks('fixed');
+      chunkObserver.unobserve(e.target);
+    }
+  });
+},{threshold:.3});
+chunkObserver.observe(document.getElementById('chunking'));
+
+// ============ "我爱中国"向量化过程自动演示（电影感版） ============
+(function(){
+  const stage=document.getElementById('embedStage');
+  const steps=document.querySelectorAll('#embedSteps .embed-step');
+  const chars=['我','爱','中','国'];
+  const vecData=[
+    {label:'我',cls:'t1',vec:['0.82','-0.31','0.45','0.67','-0.12','0.93','0.28','-0.55']},
+    {label:'爱',cls:'t2',vec:['0.71','0.62','-0.33','0.48','0.85','-0.21','0.56','0.39']},
+    {label:'中',cls:'t3',vec:['0.91','0.45','0.78','-0.15','0.63','0.72','-0.41','0.88']},
+    {label:'国',cls:'t4',vec:['0.88','0.38','0.71','0.22','0.59','0.81','-0.35','0.92']}
+  ];
+  let autoTimer=null;
+  let spaceRAF=null;
+
+  // ---- Step 1: 聚光灯文字 ----
+  function renderStep0(){
+    stage.innerHTML='';
+    const wrap=document.createElement('div');
+    wrap.className='stage-text';
+    const textWrap=document.createElement('div');
+    textWrap.className='spotlight-text';
+    const scan=document.createElement('div');
+    scan.className='scan-line';
+    const hint=document.createElement('div');
+    hint.className='stage-hint';
+    hint.textContent='输入文本：我爱中国';
+    wrap.appendChild(textWrap);
+    wrap.appendChild(scan);
+    wrap.appendChild(hint);
+    stage.appendChild(wrap);
+    // 字符依次出现
+    chars.forEach((c,i)=>{
+      const span=document.createElement('span');
+      span.className='spotlight-char';
+      span.textContent=c;
+      textWrap.appendChild(span);
+      setTimeout(()=>span.classList.add('show'),i*200+300);
+    });
+    // 扫描线扫过
+    setTimeout(()=>{
+      scan.classList.add('scanning');
+      hint.classList.add('show');
+    },chars.length*200+500);
+  }
+
+  // ---- Step 2: 分词裂变 ----
+  function renderStep1(){
+    stage.innerHTML='';
+    const wrap=document.createElement('div');
+    wrap.className='stage-tokens';
+    const src=document.createElement('div');
+    src.className='token-source';
+    src.textContent='我爱中国 → 切分为4个Token';
+    const burst=document.createElement('div');
+    burst.className='token-burst';
+    wrap.appendChild(src);
+    wrap.appendChild(burst);
+    stage.appendChild(wrap);
+    // 生成粒子爆发效果
+    setTimeout(()=>{
+      // 粒子爆发
+      for(let i=0;i<20;i++){
+        const p=document.createElement('div');
+        p.className='tok-particle';
+        const colors=['#00d4ff','#a855f7','#00ff88','#ff8c00'];
+        p.style.background=colors[i%4];
+        p.style.left='50%';p.style.top='50%';
+        const angle=Math.random()*Math.PI*2;
+        const dist=60+Math.random()*80;
+        p.style.transition='all .6s ease-out';
+        wrap.appendChild(p);
+        requestAnimationFrame(()=>{
+          p.style.opacity='1';
+          p.style.left=`calc(50% + ${Math.cos(angle)*dist}px)`;
+          p.style.top=`calc(50% + ${Math.sin(angle)*dist}px)`;
+          setTimeout(()=>p.style.opacity='0',400);
+        });
+      }
+    },200);
+    // Token依次弹出
+    chars.forEach((c,i)=>{
+      const chip=document.createElement('div');
+      chip.className='tok-chip';
+      chip.textContent=c;
+      burst.appendChild(chip);
+      setTimeout(()=>chip.classList.add('show'),i*250+400);
+    });
+    // 提示
+    const hint=document.createElement('div');
+    hint.className='stage-hint';
+    hint.textContent='每个Token将被独立编码为向量';
+    wrap.appendChild(hint);
+    setTimeout(()=>hint.classList.add('show'),chars.length*250+700);
+  }
+
+  // ---- Step 2: 向量数据流 ----
+  function renderStep2(){
+    stage.innerHTML='';
+    const wrap=document.createElement('div');
+    wrap.className='stage-vectors';
+    const grid=document.createElement('div');
+    grid.className='vec-grid';
+    wrap.appendChild(grid);
+    stage.appendChild(wrap);
+
+    // 逐行生成：token → 箭头 → 向量数字流
+    vecData.forEach((vd,rowIdx)=>{
+      const row=document.createElement('div');
+      row.className='vec-row';
+      // Token标签
+      const label=document.createElement('div');
+      label.className='vec-token-label '+vd.cls;
+      label.textContent=vd.label;
+      label.style.opacity='0';
+      label.style.transform='scale(.5)';
+      label.style.transition='all .4s cubic-bezier(.34,1.56,.64,1)';
+      row.appendChild(label);
+      // 箭头
+      const arrow=document.createElement('div');
+      arrow.className='vec-arrow';
+      row.appendChild(arrow);
+      // 向量数字流
+      const stream=document.createElement('div');
+      stream.className='vec-stream';
+      const lb=document.createElement('span');
+      lb.className='vs-bracket';lb.textContent='[';
+      stream.appendChild(lb);
+      vd.vec.forEach(v=>{
+        const num=document.createElement('span');
+        num.className='vs-num';
+        num.textContent=v;
+        stream.appendChild(num);
+      });
+      const rb=document.createElement('span');
+      rb.className='vs-bracket';rb.textContent=']';
+      stream.appendChild(rb);
+      row.appendChild(stream);
+      grid.appendChild(row);
+      // 动画时序
+      setTimeout(()=>{
+        label.style.opacity='1';
+        label.style.transform='scale(1)';
+      },rowIdx*300+200);
+      setTimeout(()=>arrow.classList.add('show'),rowIdx*300+500);
+      // 数字依次出现
+      const nums=stream.querySelectorAll('.vs-num');
+      nums.forEach((n,i)=>{
+        setTimeout(()=>n.classList.add('show'),rowIdx*300+700+i*60);
+      });
+    });
+    // 合并提示
+    const merge=document.createElement('div');
+    merge.className='merge-arrow';
+    merge.textContent='↓ 拼接为完整向量';
+    wrap.appendChild(merge);
+    const finalVec=document.createElement('div');
+    finalVec.className='final-vec';
+    finalVec.textContent='最终向量 [0.82, -0.31, 0.45, ... 共1536维]';
+    wrap.appendChild(finalVec);
+    setTimeout(()=>merge.classList.add('show'),vecData.length*300+1400);
+    setTimeout(()=>finalVec.classList.add('show'),vecData.length*300+1800);
+  }
+
+  // ---- Step 3: 空间定位（Canvas动画） ----
+  function renderStep3(){
+    stage.innerHTML='';
+    const wrap=document.createElement('div');
+    wrap.className='stage-space';
+    const canvas=document.createElement('canvas');
+    canvas.id='embedSpaceCanvas';
+    wrap.appendChild(canvas);
+    stage.appendChild(wrap);
+    const ctx=canvas.getContext('2d');
+    const rect=stage.getBoundingClientRect();
+    canvas.width=rect.width;canvas.height=280;
+    const W=canvas.width,H=canvas.height;
+
+    // 数据点
+    const center={x:W*.5,y:H*.5};
+    const similar=[
+      {text:'我热爱祖国',x:center.x-70,y:center.y-50,color:'#00ff88'},
+      {text:'中国是我的家',x:center.x+80,y:center.y-40,color:'#00ff88'},
+      {text:'中华儿女',x:center.x-60,y:center.y+60,color:'#00ff88'},
+    ];
+    const dissimilar=[
+      {text:'Python编程',x:W*.1,y:H*.15,color:'#ff4466'},
+      {text:'机器学习',x:W*.85,y:H*.2,color:'#ff4466'},
+      {text:'量子物理',x:W*.15,y:H*.8,color:'#ff4466'},
+      {text:'烹饪技巧',x:W*.8,y:H*.85,color:'#ff4466'},
+    ];
+    let mainProgress=0; //0→1 主点落下的动画
+    let linkProgress=0; //0→1 连线动画
+    let phase=0; //0=落下,1=连线,2=完成
+
+    function draw(){
+      ctx.clearRect(0,0,W,H);
+      //网格
+      ctx.strokeStyle='rgba(0,212,255,.04)';ctx.lineWidth=1;
+      for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+      for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+      //坐标轴标注
+      ctx.fillStyle='rgba(136,146,176,.3)';
+      ctx.font='10px sans-serif';
+      ctx.fillText('向量空间 (降维可视化)',12,18);
+
+      // 不相似点（先画，在背景）
+      dissimilar.forEach(d=>{
+        ctx.beginPath();
+        ctx.arc(d.x,d.y,4,0,Math.PI*2);
+        ctx.fillStyle=d.color+'80';
+        ctx.fill();
+        ctx.fillStyle='rgba(136,146,176,.4)';
+        ctx.font='10px sans-serif';
+        ctx.fillText(d.text,d.x-20,d.y-8);
+      });
+
+      // 相似点 + 连线
+      if(phase>=1){
+        similar.forEach((s,i)=>{
+          const p=Math.min(1,Math.max(0,(linkProgress-i*0.15)));
+          if(p>0){
+            ctx.beginPath();
+            ctx.moveTo(center.x,center.y);
+            //曲线
+            const cpx=(center.x+s.x)/2+20;
+            const cpy=(center.y+s.y)/2-20;
+            ctx.quadraticCurveTo(cpx,cpy,s.x,s.y);
+            ctx.strokeStyle=`rgba(0,255,136,${p*.5})`;
+            ctx.lineWidth=1.5;
+            ctx.setLineDash([4,3]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+        });
+      }
+
+      // 相似点
+      similar.forEach((s,i)=>{
+        const delay=i*0.15;
+        const p=Math.min(1,Math.max(0,(mainProgress-delay*0.3)));
+        if(p>0){
+          const cx=center.x+(s.x-center.x)*p;
+          const cy=center.y+(s.y-center.y)*p;
+          ctx.beginPath();
+          ctx.arc(cx,cy,5,0,Math.PI*2);
+          ctx.fillStyle=s.color;
+          ctx.globalAlpha=p*.8;
+          ctx.fill();
+          ctx.globalAlpha=1;
+          if(p>0.8){
+            ctx.fillStyle='rgba(0,255,136,.8)';
+            ctx.font='11px sans-serif';
+            ctx.fillText(s.text,s.x-25,s.y-8);
+          }
+        }
+      });
+
+      // 主点（最后画，在最前）
+      if(mainProgress>0){
+        const cx=center.x;
+        const cy=center.y-50*(1-mainProgress); //从上方落下
+        //脉冲圈
+        if(phase>=2){
+          const pulse=(Date.now()%2000)/2000;
+          ctx.beginPath();
+          ctx.arc(cx,cy,8+pulse*40,0,Math.PI*2);
+          ctx.strokeStyle=`rgba(255,140,0,${(1-pulse)*.4})`;
+          ctx.lineWidth=2;ctx.stroke();
+        }
+        //光晕
+        const grad=ctx.createRadialGradient(cx,cy,0,cx,cy,25);
+        grad.addColorStop(0,'rgba(255,140,0,.4)');
+        grad.addColorStop(1,'rgba(255,140,0,0)');
+        ctx.fillStyle=grad;
+        ctx.fillRect(cx-30,cy-30,60,60);
+        //主点
+        ctx.beginPath();
+        ctx.arc(cx,cy,8,0,Math.PI*2);
+        ctx.fillStyle='#ff8c00';
+        ctx.fill();
+        ctx.strokeStyle='#fff';
+        ctx.lineWidth=2;
+        ctx.stroke();
+        //标签
+        ctx.fillStyle='#fff';
+        ctx.font='bold 13px sans-serif';
+        ctx.fillText('"我爱中国"',cx-35,cy-15);
+      }
+
+      // 更新进度
+      if(phase===0){
+        mainProgress+=0.04;
+        if(mainProgress>=1){mainProgress=1;phase=1}
+      }else if(phase===1){
+        linkProgress+=0.03;
+        if(linkProgress>=1.5){linkProgress=1.5;phase=2}
+      }
+
+      spaceRAF=requestAnimationFrame(draw);
+    }
+    draw();
+
+    // 提示文字
+    const hint=document.createElement('div');
+    hint.className='stage-hint';
+    hint.innerHTML='语义相近的文本聚集在附近（绿），无关的远离（红）';
+    wrap.appendChild(hint);
+    setTimeout(()=>hint.classList.add('show'),1500);
+  }
+
+  // ---- 主控制器 ----
+  let stepIdx=0;
+  const stepDurations=[3000,3500,5000,4500]; //每步停留时间
+
+  function renderStep(idx){
+    // 更新步骤高亮
+    steps.forEach((s,i)=>s.classList.toggle('active',i<=idx));
+    // 清理上一帧
+    if(spaceRAF){cancelAnimationFrame(spaceRAF);spaceRAF=null}
+    stage.innerHTML='';
+    if(idx===0)renderStep0();
+    else if(idx===1)renderStep1();
+    else if(idx===2)renderStep2();
+    else if(idx===3)renderStep3();
+  }
+
+  function startAuto(){
+    stepIdx=0;
+    renderStep(stepIdx);
+    autoTimer=setInterval(()=>{
+      stepIdx++;
+      if(stepIdx>3){
+        stepIdx=0;
+        stage.innerHTML='';
+        const pause=document.createElement('div');
+        pause.style.cssText='display:flex;align-items:center;justify-content:center;height:280px;color:var(--text-dim);font-size:.9rem';
+        pause.textContent='↻ 重新演示...';
+        stage.appendChild(pause);
+        setTimeout(()=>{renderStep(stepIdx)},600);
+        // 重置定时器
+        clearInterval(autoTimer);
+        autoTimer=setInterval(()=>{
+          stepIdx++;
+          if(stepIdx>3){stepIdx=0;renderStep(stepIdx)}
+          else renderStep(stepIdx);
+        },stepDurations[stepIdx]||4000);
+        return;
+      }
+      renderStep(stepIdx);
+    },stepDurations[stepIdx]||4000);
+  }
+
+  const embedObs=new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting){
+        startAuto();
+      }else{
+        if(autoTimer){clearInterval(autoTimer);autoTimer=null}
+        if(spaceRAF){cancelAnimationFrame(spaceRAF);spaceRAF=null}
+      }
+    });
+  },{threshold:.2});
+  embedObs.observe(document.querySelector('.embedding-demo'));
+})();
+
+// ============ 向量空间可视化 ============
+(function(){
+  const canvas=document.getElementById('vectorCanvas');
+  const ctx=canvas.getContext('2d');
+  let W,H,points=[],queryPoint=null,matchedPoints=[];
+  const categories=[
+    {color:'#00d4ff',label:'AI技术',cx:.25,cy:.3},
+    {color:'#a855f7',label:'编程教程',cx:.7,cy:.25},
+    {color:'#00ff88',label:'产品设计',cx:.5,cy:.7},
+  ];
+  function resize(){
+    const rect=canvas.getBoundingClientRect();
+    canvas.width=rect.width;canvas.height=rect.height;
+    W=canvas.width;H=canvas.height;
+  }
+  resize();window.addEventListener('resize',resize);
+
+  function rand(min,max){return Math.random()*(max-min)+min}
+  function genPoints(){
+    points=[];
+    categories.forEach(cat=>{
+      const count=8+Math.floor(Math.random()*5);
+      for(let i=0;i<count;i++){
+        const angle=Math.random()*Math.PI*2;
+        const dist=Math.random()*80+20;
+        points.push({
+          x:cat.cx*W+Math.cos(angle)*dist,
+          y:cat.cy*H+Math.sin(angle)*dist,
+          vx:0,vy:0,
+          color:cat.color,
+          r:5+Math.random()*3,
+          cat:cat.label,
+          text:['AI模型架构','深度学习原理','Python教程','React开发','UI设计规范','用户体验研究'][Math.floor(Math.random()*6)]
+        });
+      }
+    });
+  }
+  genPoints();
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    //网格
+    ctx.strokeStyle='rgba(0,212,255,.05)';ctx.lineWidth=1;
+    for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+    for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+
+    //匹配连线
+    if(queryPoint&&matchedPoints.length>0){
+      matchedPoints.forEach((p,i)=>{
+        ctx.beginPath();
+        ctx.moveTo(queryPoint.x,queryPoint.y);
+        ctx.lineTo(p.x,p.y);
+        ctx.strokeStyle='rgba(255,68,102,'+(.8-i*.15)+')';
+        ctx.lineWidth=2;ctx.setLineDash([5,3]);ctx.stroke();
+        ctx.setLineDash([]);
+      });
+    }
+
+    //点
+    points.forEach(p=>{
+      //漂浮
+      p.x+=Math.sin(Date.now()*.001+p.r)*.2;
+      p.y+=Math.cos(Date.now()*.001+p.r)*.2;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=p.color;
+      ctx.globalAlpha=.7;ctx.fill();
+      ctx.globalAlpha=1;
+      //光晕
+      if(matchedPoints.includes(p)){
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,p.r+6,0,Math.PI*2);
+        ctx.strokeStyle='#ff4466';ctx.lineWidth=2;ctx.stroke();
+      }
+    });
+
+    //查询点
+    if(queryPoint){
+      ctx.beginPath();
+      ctx.arc(queryPoint.x,queryPoint.y,8,0,Math.PI*2);
+      ctx.fillStyle='#ff8c00';ctx.fill();
+      ctx.beginPath();
+      ctx.arc(queryPoint.x,queryPoint.y,14,0,Math.PI*2);
+      ctx.strokeStyle='rgba(255,140,0,.4)';ctx.lineWidth=2;ctx.stroke();
+      //脉冲
+      const pulse=(Date.now()%1500)/1500;
+      ctx.beginPath();
+      ctx.arc(queryPoint.x,queryPoint.y,8+pulse*30,0,Math.PI*2);
+      ctx.strokeStyle='rgba(255,140,0,'+(1-pulse)*.3+')';ctx.lineWidth=1;ctx.stroke();
+    }
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+
+  document.getElementById('addPointBtn').addEventListener('click',()=>{
+    const cat=categories[Math.floor(Math.random()*3)];
+    points.push({
+      x:cat.cx*W+rand(-40,40),
+      y:cat.cy*H+rand(-40,40),
+      color:cat.color,r:5+Math.random()*3,
+      cat:cat.label,text:'新文档'
+    });
+  });
+
+  document.getElementById('queryBtn').addEventListener('click',()=>{
+    //在中心区域生成查询点
+    queryPoint={x:W*.5,y:H*.5};
+    //计算最近4个点
+    const dists=points.map(p=>({
+      p:p,
+      d:Math.sqrt((p.x-queryPoint.x)**2+(p.y-queryPoint.y)**2)
+    })).sort((a,b)=>a.d-b.d).slice(0,4);
+    matchedPoints=dists.map(d=>d.p);
+    //高亮检索结果
+    const results=document.querySelectorAll('#retrievalResults .result-item');
+    results.forEach((r,i)=>{
+      setTimeout(()=>{
+        if(i<4)r.classList.add('matched');
+        else r.classList.remove('matched');
+      },i*200);
+    });
+  });
+
+  document.getElementById('resetVecBtn').addEventListener('click',()=>{
+    queryPoint=null;matchedPoints=[];genPoints();
+    document.querySelectorAll('#retrievalResults .result-item').forEach(r=>r.classList.remove('matched'));
+  });
+
+  //进入视口时自动触发一次查询演示
+  const vecObserver=new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting){
+        setTimeout(()=>{document.getElementById('queryBtn').click()},800);
+        vecObserver.unobserve(e.target);
+      }
+    });
+  },{threshold:.3});
+  vecObserver.observe(document.getElementById('embedding'));
+})();
+
+// ============ 重排序动画（自动触发） ============
+function runRerank(){
+  const btn=document.getElementById('rerankBtn');
+  const list=document.getElementById('rerankList');
+  const items=Array.from(list.querySelectorAll('.rerank-item'));
+  //按new-rank排序
+  items.sort((a,b)=>parseInt(a.dataset.newRank)-parseInt(b.dataset.newRank));
+  //先标记
+  items.forEach((item,i)=>{
+    item.style.opacity='0';
+    item.style.transform='translateX(20px)';
+  });
+  //重排DOM
+  items.forEach(item=>{
+    list.appendChild(item);
+    item.querySelector('.rank').textContent=item.dataset.newRank;
+    if(item.dataset.newRank==='1')item.classList.add('top');
+    else item.classList.remove('top');
+  });
+  //依次显示
+  items.forEach((item,i)=>{
+    setTimeout(()=>{
+      item.style.opacity='1';
+      item.style.transform='translateX(0)';
+    },i*200);
+  });
+  if(btn){
+    btn.textContent='✓ 已重排序';
+    btn.style.borderColor='var(--green)';
+    btn.style.background='rgba(0,255,136,.1)';
+    btn.style.color='var(--green)';
+  }
+}
+document.getElementById('rerankBtn').addEventListener('click',runRerank);
+//进入视口自动触发
+const rerankObserver=new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      setTimeout(runRerank,600);
+      rerankObserver.unobserve(e.target);
+    }
+  });
+},{threshold:.3});
+rerankObserver.observe(document.getElementById('rerank'));
+
+// ============ 生成动画（自动触发） ============
+const genText=`Transformer的注意力机制是一种让模型在处理序列时，自动关注不同位置信息的方法。
+
+核心公式：Attention(Q,K,V) = softmax(QK^T / √d) · V
+
+其中Q（Query）、K（Key）、V（Value）分别由输入向量经线性变换得到。模型通过计算Query与所有Key的点积来衡量相关性，经softmax归一化后作为权重，对Value加权求和。
+
+多头注意力让模型同时关注多个语义子空间，每个头独立学习不同的注意力模式，最后拼接输出。这种机制使Transformer无需递归即可并行处理序列，成为现代大模型的基石。`;
+function runGen(){
+  const btn=document.getElementById('genBtn');
+  const span=document.getElementById('genText');
+  const cursor=document.getElementById('genCursor');
+  span.textContent='';
+  if(btn)btn.style.display='none';
+  cursor.style.display='inline-block';
+  let i=0;
+  const timer=setInterval(()=>{
+    if(i>=genText.length){
+      clearInterval(timer);
+      cursor.style.display='none';
+      if(btn){btn.style.display='';btn.textContent='▶ 重新生成';}
+      return;
+    }
+    span.textContent+=genText[i];
+    i++;
+  },30);
+}
+document.getElementById('genBtn').addEventListener('click',runGen);
+//进入视口自动触发
+const genObserver=new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      setTimeout(runGen,500);
+      genObserver.unobserve(e.target);
+    }
+  });
+},{threshold:.3});
+genObserver.observe(document.getElementById('generation'));
+
+// ============ 检索结果高亮 ============
+const retrievalObserver=new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      const items=document.querySelectorAll('#retrievalResults .result-item');
+      items.forEach((item,i)=>{
+        setTimeout(()=>{
+          if(i<4)item.classList.add('matched');
+        },i*300);
+      });
+      retrievalObserver.unobserve(e.target);
+    }
+  });
+},{threshold:.3});
+retrievalObserver.observe(document.getElementById('retrieval'));
+
+// ============ 开场动画 ============
+(function(){
+  const overlay=document.getElementById('introOverlay');
+  const line=document.getElementById('introLine');
+  const title=document.getElementById('introTitle');
+  const subtitle=document.getElementById('introSubtitle');
+  const cta=document.getElementById('introCta');
+  const skip=document.getElementById('introSkip');
+  const startBtn=document.getElementById('introStart');
+  const canvas=document.getElementById('introParticles');
+  const ctx=canvas.getContext('2d');
+
+  //粒子背景
+  function resizeCanvas(){canvas.width=window.innerWidth;canvas.height=window.innerHeight}
+  resizeCanvas();window.addEventListener('resize',resizeCanvas);
+  const particles=[];
+  for(let i=0;i<60;i++){
+    particles.push({
+      x:Math.random()*canvas.width,y:Math.random()*canvas.height,
+      vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3,
+      r:Math.random()*2+.5,c:['#00d4ff','#a855f7','#00ff88'][Math.floor(Math.random()*3)]
+    });
+  }
+  function drawParticles(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    particles.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;
+      if(p.x<0)p.x=canvas.width;if(p.x>canvas.width)p.x=0;
+      if(p.y<0)p.y=canvas.height;if(p.y>canvas.height)p.y=0;
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=p.c;ctx.globalAlpha=.4;ctx.fill();
+    });
+    //连线
+    ctx.globalAlpha=.15;
+    for(let i=0;i<particles.length;i++){
+      for(let j=i+1;j<particles.length;j++){
+        const dx=particles[i].x-particles[j].x;
+        const dy=particles[i].y-particles[j].y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d<120){
+          ctx.beginPath();ctx.moveTo(particles[i].x,particles[i].y);
+          ctx.lineTo(particles[j].x,particles[j].y);
+          ctx.strokeStyle='#00d4ff';ctx.lineWidth=.5;ctx.stroke();
+        }
+      }
+    }
+    ctx.globalAlpha=1;
+    if(!overlay.classList.contains('hidden'))requestAnimationFrame(drawParticles);
+  }
+  drawParticles();
+
+  //动画序列
+  function playIntro(){
+    setTimeout(()=>line.classList.add('show'),300);
+    setTimeout(()=>title.classList.add('show'),800);
+    setTimeout(()=>subtitle.classList.add('show'),1500);
+    setTimeout(()=>cta.classList.add('show'),2200);
+    //5秒后自动进入
+    setTimeout(()=>hideIntro(),5500);
+  }
+
+  function hideIntro(){
+    overlay.classList.add('hidden');
+    document.body.style.overflow='';
+  }
+
+  document.body.style.overflow='hidden';
+  playIntro();
+
+  startBtn.addEventListener('click',hideIntro);
+  skip.addEventListener('click',hideIntro);
+})();
+
+// ============ 结尾动画 ============
+(function(){
+  const outro=document.getElementById('outroOverlay');
+  const close=document.getElementById('outroClose');
+  let outroShown=false;
+
+  //滚动到页面底部时触发
+  window.addEventListener('scroll',()=>{
+    if(outroShown)return;
+    const scrollPos=window.innerHeight+window.scrollY;
+    const pageHeight=document.body.scrollHeight;
+    if(scrollPos>=pageHeight-100){
+      outro.classList.add('show');
+      outroShown=true;
+    }
+  });
+
+  close.addEventListener('click',()=>{
+    outro.classList.remove('show');
+    outroShown=false;
+  });
+})();
+</script>
+</body>
+</html>

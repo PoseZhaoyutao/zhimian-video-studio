@@ -23,3 +23,14 @@ tmp_*/
 .DS_Store
 Thumbs.db
 npm-cache/
+
+# Temp / local-only
+.playwright-cli/
+batch-runs/
+datasys/
+remotion/_remotion_backup_*/
+remotion/out/
+style-picker/node_modules/
+style-picker/dist/
+tmp_inspect.py
+__pycache__/

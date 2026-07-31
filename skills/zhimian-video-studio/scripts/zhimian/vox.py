@@ -59,24 +59,35 @@ def _ffmpeg_denoise(src: Path, dst: Path) -> bool:
     import subprocess as _sp
     if not _sh.which("ffmpeg"):
         return False
-    af = (
-        "highpass=f=100,"                       # cut low-frequency rumble
-        "lowpass=f=7500,"                       # cut TTS high-freq artifacts
-        "afftdn=nr=8:nf=-25,"                   # gentle FFT denoise (was nr=14 → musical noise)
-        "deesser=i=0.4,"                        # tame sibilance for warm tone (f is 0-1 normalized, use default)
-        "dynaudnorm=p=0.85:g=101:f=250,"        # natural loudness (replaces hard compressor)
-        "equalizer=f=3000:width_type=h:width=1200:g=2,"   # warm presence boost
-        "equalizer=f=200:width_type=h:width=150:g=-2,"    # reduce muddiness
-        "equalizer=f=6000:width_type=h:width=2000:g=-2,"  # roll off harshness
-        "volume=1.2dB"                          # slight gain
-    )
-    _sp.run(
-        ["ffmpeg", "-nostdin", "-y", "-loglevel", "error",
-         "-i", str(src), "-af", af, "-ar", str(_wav_info(src)[0]),
-         str(dst)],
-        check=True, capture_output=True, text=True, encoding="utf-8",
-    )
-    return True
+    try:
+        af = (
+            "highpass=f=100,"
+            "lowpass=f=7500,"
+            "afftdn=nr=8:nf=-25,"
+            "deesser=i=0.4,"
+            "dynaudnorm=p=0.85:g=101:f=250,"
+            "equalizer=f=3000:width_type=h:width=1200:g=2,"
+            "equalizer=f=200:width_type=h:width=150:g=-2,"
+            "equalizer=f=6000:width_type=h:width=2000:g=-2,"
+            "volume=1.2dB"
+        )
+        _sp.run(
+            ["ffmpeg", "-nostdin", "-y", "-loglevel", "error",
+             "-i", str(src), "-af", af, "-ar", str(_wav_info(src)[0]),
+             str(dst)],
+            check=True, capture_output=True, text=True, encoding="utf-8",
+        )
+        return True
+    except _sp.CalledProcessError:
+        try:
+            _sp.run(
+                ["ffmpeg", "-nostdin", "-y", "-loglevel", "error",
+                 "-i", str(src), "-ar", str(_wav_info(src)[0]), str(dst)],
+                check=True, capture_output=True, text=True, encoding="utf-8",
+            )
+            return True
+        except _sp.CalledProcessError:
+            return False
 
 
 def _load_model(source: str, project_path: Path | None = None) -> Any:
