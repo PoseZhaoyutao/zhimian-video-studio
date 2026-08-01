@@ -434,6 +434,101 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Se
 }
 .complexity-conclusion.show{opacity:1;transform:scale(1)}
 
+/* ============ SVG 节点连线动画（N×M → N+M）============ */
+.topology-svg{
+  width:100%;height:200px;margin:10px 0;
+  opacity:0;transition:opacity .5s ease .3s;
+}
+.topology-svg.show{opacity:1}
+.topo-node{transition:transform .8s cubic-bezier(.34,1.56,.64,1)}
+.topo-line{
+  stroke-dasharray:300;stroke-dashoffset:300;
+  transition:stroke-dashoffset 1s ease;
+}
+.topo-line.show{stroke-dashoffset:0}
+.topo-line.chaos{stroke:rgba(239,68,68,.25);stroke-width:1}
+.topo-line.order{stroke:rgba(0,255,136,.5);stroke-width:1.5}
+.topo-label{font-size:11px;fill:var(--text-dim);font-family:Consolas,monospace}
+
+/* ============ 脉冲扫描动画（动态发现）============ */
+.pulse-demo{
+  position:relative;width:100%;height:120px;margin:10px 0;
+  opacity:0;transition:opacity .5s ease .3s;
+}
+.pulse-demo.show{opacity:1}
+.pulse-source{
+  position:absolute;left:8%;top:50%;transform:translateY(-50%);
+  width:60px;height:60px;border-radius:50%;
+  background:radial-gradient(circle,var(--cyan),rgba(0,212,255,.2));
+  border:2px solid var(--cyan);display:flex;align-items:center;justify-content:center;
+  font-size:.7rem;color:var(--text-bright);font-weight:700;
+}
+.pulse-target{
+  position:absolute;right:8%;top:50%;transform:translateY(-50%);
+  width:60px;height:60px;border-radius:50%;
+  background:radial-gradient(circle,var(--purple),rgba(168,85,247,.2));
+  border:2px solid var(--purple);display:flex;align-items:center;justify-content:center;
+  font-size:.7rem;color:var(--text-bright);font-weight:700;
+}
+.pulse-wave{
+  position:absolute;left:8%;top:50%;width:60px;height:60px;border-radius:50%;
+  border:2px solid var(--cyan);transform:translateY(-50%);
+  opacity:0;
+}
+.pulse-demo.show .pulse-wave{animation:pulse-emit 2.5s ease-out infinite}
+.pulse-demo.show .pulse-wave:nth-child(2){animation-delay:.8s}
+.pulse-demo.show .pulse-wave:nth-child(3){animation-delay:1.6s}
+@keyframes pulse-emit{
+  0%{width:60px;height:60px;opacity:.8;left:8%}
+  100%{width:400px;height:400px;opacity:0;left:calc(8% + 30px);margin-left:-170px;margin-top:-170px;top:50%}
+}
+.data-packet{
+  position:absolute;width:14px;height:14px;border-radius:50%;
+  background:var(--green);box-shadow:0 0 12px var(--green);
+  top:50%;left:calc(8% + 60px);transform:translateY(-50%);
+  opacity:0;
+}
+.pulse-demo.show .data-packet{animation:packet-fly 2.5s ease-in-out 1.2s infinite}
+@keyframes packet-fly{
+  0%{left:calc(8% + 60px);opacity:0;transform:translateY(-50%) scale(.5)}
+  20%{opacity:1;transform:translateY(-50%) scale(1)}
+  80%{opacity:1;transform:translateY(-50%) scale(1)}
+  100%{left:calc(92% - 60px);opacity:0;transform:translateY(-50%) scale(.5)}
+}
+
+/* ============ 数据流动动画（三层架构）============ */
+.arch-flow-svg{
+  position:absolute;inset:0;pointer-events:none;z-index:1;
+  opacity:0;transition:opacity .5s ease .5s;
+}
+.arch-flow-svg.show{opacity:1}
+.flow-packet{
+  fill:var(--green);filter:drop-shadow(0 0 6px var(--green));
+}
+
+/* ============ Agent底座辐射动画增强 ============ */
+.agent-center{
+  position:relative;z-index:3;
+}
+.agent-center::before{
+  content:'';position:absolute;inset:-20px;border-radius:50%;
+  background:radial-gradient(circle,rgba(0,212,255,.3),transparent 70%);
+  animation:agent-breathe 3s ease-in-out infinite;
+}
+@keyframes agent-breathe{
+  0%,100%{transform:scale(1);opacity:.6}
+  50%{transform:scale(1.3);opacity:.3}
+}
+.agent-ray{
+  position:absolute;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+  transform-origin:left center;opacity:0;z-index:2;
+}
+.agent-ray.show{opacity:.6;animation:ray-pulse 2s ease-in-out infinite}
+@keyframes ray-pulse{
+  0%,100%{opacity:.2}
+  50%{opacity:.7}
+}
+
 /* ============ 动态发现页 ============ */
 .discovery-layout{flex:1;display:flex;flex-direction:column;justify-content:center;gap:28px}
 .discovery-flow{display:flex;align-items:stretch;gap:0;justify-content:center}
@@ -601,6 +696,40 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Se
           <div class="complexity-desc">应用实现一次 Client<br>工具实现一次 Server<br>双方协议握手，自由组合</div>
         </div>
       </div>
+      <svg class="topology-svg" id="topoSvg" viewBox="0 0 1720 200" preserveAspectRatio="xMidYMid meet">
+        <text x="430" y="20" text-anchor="middle" class="topo-label" fill="#ef4444">N × M · 混乱网状连接</text>
+        <g id="chaosLeft">
+          <circle cx="100" cy="70" r="10" fill="#00d4ff"/><text x="100" y="95" text-anchor="middle" class="topo-label">App1</text>
+          <circle cx="100" cy="130" r="10" fill="#00d4ff"/><text x="100" y="155" text-anchor="middle" class="topo-label">App2</text>
+          <circle cx="760" cy="50" r="10" fill="#a855f7"/><text x="760" y="75" text-anchor="middle" class="topo-label">Tool1</text>
+          <circle cx="760" cy="100" r="10" fill="#a855f7"/><text x="760" y="125" text-anchor="middle" class="topo-label">Tool2</text>
+          <circle cx="760" cy="150" r="10" fill="#a855f7"/><text x="760" y="175" text-anchor="middle" class="topo-label">Tool3</text>
+          <line class="topo-line chaos" x1="110" y1="70" x2="750" y2="50"/>
+          <line class="topo-line chaos" x1="110" y1="70" x2="750" y2="100"/>
+          <line class="topo-line chaos" x1="110" y1="70" x2="750" y2="150"/>
+          <line class="topo-line chaos" x1="110" y1="130" x2="750" y2="50"/>
+          <line class="topo-line chaos" x1="110" y1="130" x2="750" y2="100"/>
+          <line class="topo-line chaos" x1="110" y1="130" x2="750" y2="150"/>
+        </g>
+        <text x="1290" y="20" text-anchor="middle" class="topo-label" fill="#00ff88">N + M · 协议层解耦</text>
+        <g id="orderRight">
+          <circle cx="960" cy="70" r="10" fill="#00d4ff"/><text x="960" y="95" text-anchor="middle" class="topo-label">App1</text>
+          <circle cx="960" cy="130" r="10" fill="#00d4ff"/><text x="960" y="155" text-anchor="middle" class="topo-label">App2</text>
+          <rect x="1120" y="85" width="80" height="30" rx="6" fill="none" stroke="#00ff88" stroke-width="1.5"/>
+          <text x="1160" y="104" text-anchor="middle" class="topo-label" fill="#00ff88">Client</text>
+          <rect x="1280" y="85" width="80" height="30" rx="6" fill="none" stroke="#00ff88" stroke-width="1.5"/>
+          <text x="1320" y="104" text-anchor="middle" class="topo-label" fill="#00ff88">Server</text>
+          <circle cx="1480" cy="50" r="10" fill="#a855f7"/><text x="1480" y="75" text-anchor="middle" class="topo-label">Tool1</text>
+          <circle cx="1480" cy="100" r="10" fill="#a855f7"/><text x="1480" y="125" text-anchor="middle" class="topo-label">Tool2</text>
+          <circle cx="1480" cy="150" r="10" fill="#a855f7"/><text x="1480" y="175" text-anchor="middle" class="topo-label">Tool3</text>
+          <line class="topo-line order" x1="970" y1="70" x2="1120" y2="100"/>
+          <line class="topo-line order" x1="970" y1="130" x2="1120" y2="100"/>
+          <line class="topo-line order" x1="1200" y1="100" x2="1280" y2="100"/>
+          <line class="topo-line order" x1="1360" y1="100" x2="1470" y2="50"/>
+          <line class="topo-line order" x1="1360" y1="100" x2="1470" y2="100"/>
+          <line class="topo-line order" x1="1360" y1="100" x2="1470" y2="150"/>
+        </g>
+      </svg>
       <div class="complexity-conclusion">N×M → N+M，这是代数级的复杂度下降</div>
     </div>
     <div class="page-num">04 / 12</div>
@@ -634,6 +763,14 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Se
           <div class="discovery-step-title">按需调用</div>
           <div class="discovery-step-desc">工具升级、新增、下线，模型零重训即时感知</div>
         </div>
+      </div>
+      <div class="pulse-demo" id="pulseDemo">
+        <div class="pulse-source">模型</div>
+        <div class="pulse-wave"></div>
+        <div class="pulse-wave"></div>
+        <div class="pulse-wave"></div>
+        <div class="data-packet"></div>
+        <div class="pulse-target">Server</div>
       </div>
       <div class="discovery-note">模型不需要把工具知识训练进权重 · 知识在协议层流动，不在权重里固化</div>
     </div>
@@ -871,13 +1008,13 @@ const slideElements=document.querySelectorAll('.slide');
 slideElements.forEach((slide,index)=>{
   slide.activate=function(){
     // 触发该页所有动画元素
-    const animated=slide.querySelectorAll('.intro-title,.outro-title,.intro-subtitle,.outro-subtitle,.intro-footer,.outro-footer,.position-badge,.position-statement,.position-explain,.problem-intro,.path-card,.cli-terminal,.cli-line,.cli-problem,.paradigm-formula,.paradigm-explain,.paradigm-conclusion,.arch-layer,.primitive-card,.compare-table,.compare-conclusion,.eco-intro,.eco-card,.eco-warning,.compare-col,.compare-item,.analogy-intro,.analogy-card,.analogy-conclusion,.complexity-card,.complexity-conclusion,.discovery-step,.discovery-arrow,.discovery-note,.importance-card,.agent-center,.agent-ring,.agent-node,.agent-judgement');
+    const animated=slide.querySelectorAll('.intro-title,.outro-title,.intro-subtitle,.outro-subtitle,.intro-footer,.outro-footer,.position-badge,.position-statement,.position-explain,.problem-intro,.path-card,.cli-terminal,.cli-line,.cli-problem,.paradigm-formula,.paradigm-explain,.paradigm-conclusion,.arch-layer,.primitive-card,.compare-table,.compare-conclusion,.eco-intro,.eco-card,.eco-warning,.compare-col,.compare-item,.analogy-intro,.analogy-card,.analogy-conclusion,.complexity-card,.complexity-conclusion,.discovery-step,.discovery-arrow,.discovery-note,.importance-card,.agent-center,.agent-ring,.agent-node,.agent-judgement,.topology-svg,.topo-line,.pulse-demo');
     animated.forEach((el,i)=>{
       setTimeout(()=>el.classList.add('show'),i*80);
     });
   };
   slide.deactivate=function(){
-    const animated=slide.querySelectorAll('.intro-title,.outro-title,.intro-subtitle,.outro-subtitle,.intro-footer,.outro-footer,.position-badge,.position-statement,.position-explain,.problem-intro,.path-card,.cli-terminal,.cli-line,.cli-problem,.paradigm-formula,.paradigm-explain,.paradigm-conclusion,.arch-layer,.primitive-card,.compare-table,.compare-conclusion,.eco-intro,.eco-card,.eco-warning,.compare-col,.compare-item,.analogy-intro,.analogy-card,.analogy-conclusion,.complexity-card,.complexity-conclusion,.discovery-step,.discovery-arrow,.discovery-note,.importance-card,.agent-center,.agent-ring,.agent-node,.agent-judgement');
+    const animated=slide.querySelectorAll('.intro-title,.outro-title,.intro-subtitle,.outro-subtitle,.intro-footer,.outro-footer,.position-badge,.position-statement,.position-explain,.problem-intro,.path-card,.cli-terminal,.cli-line,.cli-problem,.paradigm-formula,.paradigm-explain,.paradigm-conclusion,.arch-layer,.primitive-card,.compare-table,.compare-conclusion,.eco-intro,.eco-card,.eco-warning,.compare-col,.compare-item,.analogy-intro,.analogy-card,.analogy-conclusion,.complexity-card,.complexity-conclusion,.discovery-step,.discovery-arrow,.discovery-note,.importance-card,.agent-center,.agent-ring,.agent-node,.agent-judgement,.topology-svg,.topo-line,.pulse-demo');
     animated.forEach(el=>el.classList.remove('show'));
   };
 });
