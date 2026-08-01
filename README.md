@@ -39,6 +39,7 @@
 | 2026-07-28 | MoE 路由机制 | [`knowledge-sharing/2026-07-28-moe-router/index.html`](knowledge-sharing/2026-07-28-moe-router/index.html) | 混合专家模型路由可视化（React 构建） |
 | 2026-07-29 | TRAE 小白教程 | [`knowledge-sharing/2026-07-29-trae-tutorial/index.html`](knowledge-sharing/2026-07-29-trae-tutorial/index.html) | 从零搭建 AI 视频生产线全流程教程 |
 | 2026-07-31 | RAG 全流程拆解 | [`knowledge-sharing/2026-07-31-rag-pipeline/index.html`](knowledge-sharing/2026-07-31-rag-pipeline/index.html) | 12 页分页式幻灯片，从幻觉诊断到六步流程，含向量化 4 步动画与重排序演示，配合 VoxCPM2 统一男声配音实现音画同步 |
+| 2026-07-31 | MCP 模型上下文协议 | [`knowledge-sharing/2026-07-31-mcp-protocol/index.html`](knowledge-sharing/2026-07-31-mcp-protocol/index.html) | 12 页分页式幻灯片，Tao 同学立场：MCP 是 AI 操作的必经之路。含指令微调命令行操作演示、MCP 三层架构动画、三原语解析与五维度对比表 |
 
 **使用方式**：
 

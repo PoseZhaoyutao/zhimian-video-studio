@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCP模型上下文协议：AI操作的必经之路</title>
+<style>
+/* ============ 基础重置 ============ */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0e1a; --bg2:#111638; --surface:#161b3d;
+  --cyan:#00d4ff; --purple:#a855f7; --green:#00ff88;
+  --yellow:#ffd700; --red:#ef4444; --orange:#ff8c00;
+  --text:#e2e8f0; --text-dim:#8892b0; --text-bright:#fff;
+  --border:rgba(0,212,255,0.18);
+  --grad-cp:linear-gradient(135deg,#00d4ff,#a855f7);
+  --grad-cg:linear-gradient(135deg,#00ff88,#00d4ff);
+}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Segoe UI','Microsoft YaHei',system-ui,sans-serif}
+
+/* ============ 舞台缩放容器 ============ */
+.viewport{
+  position:fixed;inset:0;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+}
+.slide-stage{
+  width:1920px;height:1080px;position:relative;
+  transform-origin:center center;flex-shrink:0;
+}
+
+/* ============ 单页通用 ============ */
+.slide{
+  position:absolute;inset:0;width:1920px;height:1080px;
+  opacity:0;visibility:hidden;
+  transition:opacity .5s ease,visibility .5s;
+  overflow:hidden;
+}
+.slide.active{opacity:1;visibility:visible;z-index:2}
+.slide-content{width:100%;height:100%;position:relative;padding:60px 100px;display:flex;flex-direction:column}
+
+/* 页面编号 */
+.page-num{
+  position:absolute;bottom:30px;right:50px;
+  font-size:1rem;color:var(--text-dim);font-family:Consolas,monospace;
+  letter-spacing:2px;z-index:10;opacity:.6;
+}
+
+/* ============ 通用排版 ============ */
+.section-num{font-size:1rem;color:var(--cyan);font-weight:600;letter-spacing:3px;text-transform:uppercase}
+.section-title{font-size:3.5rem;font-weight:800;color:var(--text-bright);margin:10px 0 16px;line-height:1.15}
+.section-subtitle{font-size:1.4rem;color:var(--text-dim);max-width:1400px}
+
+/* ============ 开场页 / 结尾页 ============ */
+.fullscreen-slide .slide-content{padding:0;align-items:center;justify-content:center;text-align:center}
+.fullscreen-canvas{position:absolute;inset:0;width:1920px;height:1080px;z-index:0}
+.fullscreen-content{position:relative;z-index:2;text-align:center;top:50%;transform:translateY(-60%)}
+.intro-title,.outro-title{
+  font-size:6rem;font-weight:900;
+  background:linear-gradient(135deg,#00d4ff 0%,#a855f7 50%,#00ff88 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-size:200% 200%;
+  opacity:0;transform:scale(.4);
+  transition:opacity .8s cubic-bezier(.34,1.56,.64,1),transform .8s cubic-bezier(.34,1.56,.64,1);
+  animation:gradient-shift 4s ease infinite;
+  margin-bottom:24px;
+}
+@keyframes gradient-shift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+.intro-title.show,.outro-title.show{opacity:1;transform:scale(1)}
+.intro-subtitle,.outro-subtitle{
+  font-size:2rem;color:var(--cyan);
+  opacity:0;transform:translateY(30px);
+  transition:all .6s ease .3s;
+  margin-bottom:20px;
+}
+.intro-subtitle.show,.outro-subtitle.show{opacity:1;transform:translateY(0)}
+.intro-footer,.outro-footer{
+  position:absolute;bottom:220px;left:0;right:0;text-align:center;z-index:3;
+  opacity:0;transform:translateY(30px);
+  transition:all .6s ease .6s;
+}
+.intro-footer.show,.outro-footer.show{opacity:1;transform:translateY(0)}
+.repo-text{font-size:1.3rem;color:var(--green);font-family:Consolas,monospace;margin-top:12px}
+.repo-label{font-size:1.1rem;color:var(--text-dim);margin-top:8px}
+.bottom-tag{font-size:1rem;color:var(--text-dim);margin-top:24px}
+
+/* ============ 立场页 ============ */
+.position-layout{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:40px}
+.position-badge{
+  display:inline-block;padding:14px 40px;border:2px solid var(--yellow);
+  border-radius:99px;color:var(--yellow);font-size:1.4rem;font-weight:700;
+  letter-spacing:2px;animation:pulse-yellow 2s infinite;
+  opacity:0;transform:translateY(20px);transition:all .6s ease;
+}
+.position-badge.show{opacity:1;transform:translateY(0)}
+@keyframes pulse-yellow{0%,100%{box-shadow:0 0 0 0 rgba(255,215,0,.3)}50%{box-shadow:0 0 30px 8px rgba(255,215,0,.2)}}
+.position-statement{
+  font-size:4.2rem;font-weight:900;line-height:1.2;max-width:1500px;
+  background:linear-gradient(135deg,#ffd700 0%,#ff8c00 50%,#ef4444 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  opacity:0;transform:translateY(40px);transition:all .8s ease .3s;
+}
+.position-statement.show{opacity:1;transform:translateY(0)}
+.position-explain{
+  font-size:1.6rem;color:var(--text-dim);max-width:1200px;line-height:1.7;
+  opacity:0;transform:translateY(30px);transition:all .6s ease .6s;
+}
+.position-explain.show{opacity:1;transform:translateY(0)}
+.position-explain strong{color:var(--cyan)}
+
+/* ============ 对比页通用 ============ */
+.compare-layout{flex:1;display:flex;flex-direction:column;gap:24px;margin-top:20px}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;flex:1}
+.compare-col{
+  background:var(--surface);border:2px solid var(--border);border-radius:20px;
+  padding:36px 40px;display:flex;flex-direction:column;gap:18px;position:relative;overflow:hidden;
+  opacity:0;transform:translateY(40px);transition:all .6s ease;
+}
+.compare-col.show{opacity:1;transform:translateY(0)}
+.compare-col.left{transition-delay:.2s}
+.compare-col.right{transition-delay:.4s;border-color:var(--green)}
+.compare-col-header{
+  display:flex;align-items:center;gap:16px;padding-bottom:18px;
+  border-bottom:1px solid var(--border);
+}
+.compare-col.left .compare-col-header{border-bottom-color:var(--red)}
+.compare-col.right .compare-col-header{border-bottom-color:var(--green)}
+.compare-col-icon{font-size:2.5rem}
+.compare-col-title{font-size:2rem;font-weight:800}
+.compare-col.left .compare-col-title{color:var(--red)}
+.compare-col.right .compare-col-title{color:var(--green)}
+.compare-col-sub{font-size:1.05rem;color:var(--text-dim);margin-top:-8px}
+.compare-item{
+  display:flex;gap:14px;padding:14px 18px;background:rgba(0,0,0,.25);border-radius:10px;
+  opacity:0;transform:translateX(-20px);transition:all .4s ease;
+}
+.compare-item.show{opacity:1;transform:translateX(0)}
+.compare-item-icon{font-size:1.3rem;flex-shrink:0}
+.compare-item-body h4{font-size:1.15rem;font-weight:700;margin-bottom:4px}
+.compare-item-body p{font-size:.98rem;color:var(--text-dim);line-height:1.5}
+.compare-col.left .compare-item-icon{color:var(--red)}
+.compare-col.right .compare-item-icon{color:var(--green)}
+
+/* ============ 问题页 - 旧方案两路 ============ */
+.problem-layout{flex:1;display:flex;flex-direction:column;gap:32px;margin-top:20px}
+.problem-intro{
+  font-size:1.5rem;color:var(--text);line-height:1.7;text-align:center;max-width:1500px;margin:0 auto;
+  opacity:0;transform:translateY(20px);transition:all .6s ease;
+}
+.problem-intro.show{opacity:1;transform:translateY(0)}
+.problem-paths{display:grid;grid-template-columns:1fr 1fr;gap:40px;flex:1}
+.path-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:18px;
+  padding:36px;display:flex;flex-direction:column;gap:16px;
+  opacity:0;transform:translateY(40px) scale(.95);transition:all .6s ease;
+}
+.path-card.show{opacity:1;transform:translateY(0) scale(1)}
+.path-card.highlight{border-color:var(--orange);box-shadow:0 0 30px rgba(255,140,0,.15)}
+.path-num{
+  width:56px;height:56px;border-radius:50%;background:var(--bg2);
+  border:2px solid var(--cyan);display:flex;align-items:center;justify-content:center;
+  font-size:1.6rem;font-weight:800;color:var(--cyan);
+}
+.path-card.highlight .path-num{border-color:var(--orange);color:var(--orange)}
+.path-title{font-size:1.8rem;font-weight:800;color:var(--text-bright)}
+.path-desc{font-size:1.1rem;color:var(--text-dim);line-height:1.6}
+.path-card.highlight .path-title{color:var(--orange)}
+
+/* ============ MCP架构页 ============ */
+.arch-layout{flex:1;display:flex;align-items:center;justify-content:center;margin-top:20px}
+.arch-diagram{width:100%;max-width:1600px;display:flex;flex-direction:column;gap:0}
+.arch-layer{
+  display:flex;align-items:center;justify-content:center;gap:24px;
+  padding:28px 40px;border:2px solid var(--border);border-radius:16px;
+  background:var(--surface);position:relative;
+  opacity:0;transform:translateY(30px);transition:all .6s ease;
+}
+.arch-layer.show{opacity:1;transform:translateY(0)}
+.arch-layer.host{border-color:var(--cyan);background:rgba(0,212,255,.08)}
+.arch-layer.client{border-color:var(--purple);background:rgba(168,85,247,.08);margin:24px 0}
+.arch-layer.servers{border-color:var(--green);background:rgba(0,255,136,.08);flex-wrap:wrap}
+.arch-layer-label{
+  position:absolute;left:-20px;top:-14px;background:var(--bg);
+  padding:4px 16px;border-radius:99px;font-size:.95rem;font-weight:700;
+  border:1px solid currentColor;
+}
+.arch-layer.host .arch-layer-label{color:var(--cyan)}
+.arch-layer.client .arch-layer-label{color:var(--purple)}
+.arch-layer.servers .arch-layer-label{color:var(--green)}
+.arch-node{
+  padding:18px 32px;border-radius:12px;background:rgba(0,0,0,.3);
+  border:1px solid var(--border);font-size:1.3rem;font-weight:700;color:var(--text-bright);
+  display:flex;align-items:center;gap:10px;
+}
+.arch-node .node-icon{font-size:1.6rem}
+.arch-connector{
+  width:4px;height:32px;background:linear-gradient(180deg,var(--cyan),var(--purple));
+  margin:0 auto;position:relative;
+}
+.arch-connector::after{
+  content:'';position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);
+  width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;
+  border-top:10px solid var(--purple);
+}
+.arch-server-grid{display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+
+/* ============ 协议三原语页 ============ */
+.primitives-layout{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:32px;margin-top:30px}
+.primitive-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:20px;
+  padding:40px 32px;display:flex;flex-direction:column;gap:18px;position:relative;overflow:hidden;
+  opacity:0;transform:translateY(60px) scale(.9);
+  transition:opacity .6s ease,transform .6s cubic-bezier(.34,1.56,.64,1);
+}
+.primitive-card.show{opacity:1;transform:translateY(0) scale(1)}
+.primitive-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:5px;
+}
+.primitive-card:nth-child(1)::before{background:linear-gradient(90deg,#00d4ff,#a855f7)}
+.primitive-card:nth-child(2)::before{background:linear-gradient(90deg,#a855f7,#00ff88)}
+.primitive-card:nth-child(3)::before{background:linear-gradient(90deg,#00ff88,#ffd700)}
+.primitive-card:nth-child(1){transition-delay:.1s}
+.primitive-card:nth-child(2){transition-delay:.3s}
+.primitive-card:nth-child(3){transition-delay:.5s}
+.primitive-icon{font-size:3.5rem}
+.primitive-name{font-size:2.2rem;font-weight:800;color:var(--text-bright)}
+.primitive-card:nth-child(1) .primitive-name{color:var(--cyan)}
+.primitive-card:nth-child(2) .primitive-name{color:var(--purple)}
+.primitive-card:nth-child(3) .primitive-name{color:var(--green)}
+.primitive-desc{font-size:1.15rem;color:var(--text-dim);line-height:1.6}
+.primitive-example{
+  margin-top:auto;padding:16px 20px;background:rgba(0,0,0,.4);border-radius:10px;
+  font-family:Consolas,monospace;font-size:.95rem;color:var(--green);
+  border-left:3px solid var(--green);
+}
+
+/* ============ 对比总结表页 ============ */
+.compare-table-layout{flex:1;display:flex;flex-direction:column;justify-content:center;margin-top:20px}
+.compare-table{
+  width:100%;border-collapse:separate;border-spacing:0;
+  background:var(--surface);border-radius:18px;overflow:hidden;
+  border:1px solid var(--border);
+  opacity:0;transform:translateY(30px);transition:all .6s ease;
+}
+.compare-table.show{opacity:1;transform:translateY(0)}
+.compare-table th,.compare-table td{
+  padding:24px 28px;text-align:left;font-size:1.15rem;border-bottom:1px solid var(--border);
+}
+.compare-table th{
+  background:rgba(0,0,0,.4);font-weight:800;font-size:1.25rem;
+}
+.compare-table th:nth-child(1){color:var(--text-dim);width:25%}
+.compare-table th:nth-child(2){color:var(--red)}
+.compare-table th:nth-child(3){color:var(--green)}
+.compare-table td:nth-child(1){color:var(--cyan);font-weight:600}
+.compare-table td:nth-child(2){color:var(--text)}
+.compare-table td:nth-child(3){color:var(--text-bright);font-weight:600}
+.compare-table tr:last-child td{border-bottom:none}
+.compare-table tr{opacity:0;animation:row-in .4s ease forwards}
+.compare-table.show tr:nth-child(1){animation-delay:.1s}
+.compare-table.show tr:nth-child(2){animation-delay:.2s}
+.compare-table.show tr:nth-child(3){animation-delay:.3s}
+.compare-table.show tr:nth-child(4){animation-delay:.4s}
+.compare-table.show tr:nth-child(5){animation-delay:.5s}
+.compare-table.show tr:nth-child(6){animation-delay:.6s}
+@keyframes row-in{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}
+.compare-conclusion{
+  margin-top:28px;padding:20px 32px;text-align:center;
+  background:rgba(0,255,136,.08);border:1px solid var(--green);border-radius:12px;
+  font-size:1.5rem;color:var(--green);font-weight:700;
+  opacity:0;transform:translateY(20px);transition:all .6s ease .8s;
+}
+.compare-conclusion.show{opacity:1;transform:translateY(0)}
+
+/* ============ 生态页 ============ */
+.eco-layout{flex:1;display:flex;flex-direction:column;gap:28px;margin-top:20px}
+.eco-intro{
+  font-size:1.4rem;color:var(--text);line-height:1.6;text-align:center;
+  opacity:0;transform:translateY(20px);transition:all .5s ease;
+}
+.eco-intro.show{opacity:1;transform:translateY(0)}
+.eco-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;flex:1}
+.eco-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:28px 24px;display:flex;flex-direction:column;gap:12px;position:relative;
+  opacity:0;transform:translateY(40px) scale(.9);
+  transition:all .5s cubic-bezier(.34,1.56,.64,1);
+}
+.eco-card.show{opacity:1;transform:translateY(0) scale(1)}
+.eco-card:nth-child(1){transition-delay:.1s}
+.eco-card:nth-child(2){transition-delay:.2s}
+.eco-card:nth-child(3){transition-delay:.3s}
+.eco-card:nth-child(4){transition-delay:.4s}
+.eco-card:nth-child(5){transition-delay:.5s}
+.eco-card:nth-child(6){transition-delay:.6s}
+.eco-card:nth-child(7){transition-delay:.7s}
+.eco-card:nth-child(8){transition-delay:.8s}
+.eco-card.official{border-color:var(--cyan)}
+.eco-card.community{border-color:var(--purple)}
+.eco-card.app{border-color:var(--green)}
+.eco-card-tag{
+  position:absolute;top:12px;right:12px;padding:3px 10px;border-radius:99px;
+  font-size:.75rem;font-weight:700;
+}
+.eco-card.official .eco-card-tag{background:rgba(0,212,255,.2);color:var(--cyan)}
+.eco-card.community .eco-card-tag{background:rgba(168,85,247,.2);color:var(--purple)}
+.eco-card.app .eco-card-tag{background:rgba(0,255,136,.2);color:var(--green)}
+.eco-card-icon{font-size:2.5rem}
+.eco-card-name{font-size:1.4rem;font-weight:800;color:var(--text-bright)}
+.eco-card-desc{font-size:.95rem;color:var(--text-dim);line-height:1.5}
+.eco-warning{
+  padding:20px 32px;background:rgba(255,215,0,.08);border:1px solid var(--yellow);
+  border-radius:12px;font-size:1.3rem;color:var(--yellow);font-weight:600;text-align:center;
+  opacity:0;transform:translateY(20px);transition:all .6s ease 1s;
+}
+.eco-warning.show{opacity:1;transform:translateY(0)}
+
+/* ============ 范式差异页 ============ */
+.paradigm-layout{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:40px}
+.paradigm-formula{
+  font-size:3rem;font-weight:800;text-align:center;line-height:1.4;
+  opacity:0;transform:scale(.8);transition:all .8s cubic-bezier(.34,1.56,.64,1);
+}
+.paradigm-formula.show{opacity:1;transform:scale(1)}
+.paradigm-formula .old{color:var(--red);text-decoration:line-through;text-decoration-color:var(--red)}
+.paradigm-formula .new{color:var(--green)}
+.paradigm-formula .arrow{color:var(--text-dim);margin:0 20px}
+.paradigm-explain{
+  font-size:1.6rem;color:var(--text);line-height:1.8;text-align:center;max-width:1400px;
+  opacity:0;transform:translateY(30px);transition:all .6s ease .4s;
+}
+.paradigm-explain.show{opacity:1;transform:translateY(0)}
+.paradigm-explain strong{color:var(--cyan)}
+.paradigm-conclusion{
+  font-size:2.2rem;font-weight:900;color:var(--yellow);text-align:center;
+  opacity:0;transform:translateY(30px);transition:all .6s ease .8s;
+  padding:20px 40px;border:2px solid var(--yellow);border-radius:16px;
+  background:rgba(255,215,0,.05);
+}
+.paradigm-conclusion.show{opacity:1;transform:translateY(0)}
+
+/* ============ 命令行操作演示页（指令微调） ============ */
+.cli-layout{flex:1;display:flex;flex-direction:column;gap:20px;margin-top:20px}
+.cli-terminal{
+  background:#0d1117;border:1px solid var(--border);border-radius:14px;
+  padding:28px 32px;font-family:Consolas,monospace;flex:1;overflow:hidden;
+  opacity:0;transform:translateY(30px);transition:all .6s ease;
+}
+.cli-terminal.show{opacity:1;transform:translateY(0)}
+.cli-header{display:flex;gap:8px;margin-bottom:18px}
+.cli-dot{width:14px;height:14px;border-radius:50%}
+.cli-dot.red{background:#ff5f56}
+.cli-dot.yellow{background:#ffbd2e}
+.cli-dot.green{background:#27c93f}
+.cli-line{font-size:1.2rem;line-height:1.8;margin-bottom:6px;opacity:0;transform:translateX(-10px);transition:all .3s ease}
+.cli-line.show{opacity:1;transform:translateX(0)}
+.cli-prompt{color:var(--green)}
+.cli-cmd{color:var(--cyan)}
+.cli-output{color:var(--text-dim)}
+.cli-error{color:var(--red)}
+.cli-warning{color:var(--yellow)}
+.cli-cursor{display:inline-block;width:10px;height:1.2rem;background:var(--cyan);animation:blink 1s infinite;vertical-align:middle;margin-left:4px}
+@keyframes blink{0%,50%{opacity:1}51%,100%{opacity:0}}
+.cli-problem-list{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:20px;
+}
+.cli-problem{
+  padding:20px 24px;background:rgba(239,68,68,.08);border:1px solid var(--red);
+  border-radius:12px;display:flex;gap:14px;align-items:flex-start;
+  opacity:0;transform:translateY(20px);transition:all .5s ease;
+}
+.cli-problem.show{opacity:1;transform:translateY(0)}
+.cli-problem:nth-child(1){transition-delay:.3s}
+.cli-problem:nth-child(2){transition-delay:.5s}
+.cli-problem:nth-child(3){transition-delay:.7s}
+.cli-problem-icon{font-size:1.8rem;color:var(--red);flex-shrink:0}
+.cli-problem-body h4{font-size:1.2rem;color:var(--red);margin-bottom:6px}
+.cli-problem-body p{font-size:.98rem;color:var(--text-dim);line-height:1.5}
+</style>
+</head>
+<body>
+
+<div class="viewport">
+<div class="slide-stage">
+
+<!-- ========== 第1页：开场 ========== -->
+<div class="slide fullscreen-slide" data-slide="0">
+  <canvas class="fullscreen-canvas" id="introCanvas"></canvas>
+  <div class="fullscreen-content">
+    <div class="intro-title">关注 Tao 同学</div>
+    <div class="intro-subtitle">知识分享系列 · MCP 模型上下文协议</div>
+  </div>
+  <div class="intro-footer">
+    <div class="repo-label">所有知识分享网页均已开源 · 供大家学习</div>
+    <div class="repo-text">github.com/PoseZhaoyutao/zhimian-video-studio · knowledge-sharing/</div>
+    <div class="bottom-tag">本期拆解 MCP：AI 操作的必经之路</div>
+  </div>
+  <div class="page-num">01 / 12</div>
+</div>
+
+<!-- ========== 第2页：立场页 ========== -->
+<div class="slide" data-slide="1">
+  <div class="slide-content">
+    <div class="section-num">Tao 同学立场</div>
+    <div class="position-layout">
+      <div class="position-badge">本期能量观点</div>
+      <div class="position-statement">MCP 是未来 AI 的必经之路</div>
+      <div class="position-explain">
+        它不是又一个工具，而是<strong>所有 AI 操作的基础协议</strong>。<br>
+        理解 MCP，才能理解下一代 AI 应用如何连接世界。
+      </div>
+    </div>
+    <div class="page-num">02 / 12</div>
+  </div>
+</div>
+
+<!-- ========== 第3页：问题背景 - 旧方案两路 ========== -->
+<div class="slide" data-slide="2">
+  <div class="slide-content">
+    <div class="section-num">问题背景</div>
+    <div class="section-title">在 MCP 出现前，大模型如何操作外部工具？</div>
+    <div class="problem-layout">
+      <div class="problem-intro">只有两条路，而且都有根本问题</div>
+      <div class="problem-paths">
+        <div class="path-card">
+          <div class="path-num">1</div>
+          <div class="path-title">硬编码 API</div>
+          <div class="path-desc">每个工具写一套对接代码。N 个工具就是 N 套适配，维护成本指数增长，工具升级即代码重写。</div>
+        </div>
+        <div class="path-card highlight">
+          <div class="path-num">2</div>
+          <div class="path-title">指令微调（SFT）</div>
+          <div class="path-desc">把命令行操作示例训练进模型权重。现在很火，看似模型会操作命令行了，但本质是把操作模式记忆进了权重。问题很深。</div>
+        </div>
+      </div>
+    </div>
+    <div class="page-num">03 / 12</div>
+  </div>
+</div>
+
+<!-- ========== 第4页：指令微调原理 - 命令行操作演示 ========== -->
+<div class="slide" data-slide="3">
+  <div class="slide-content">
+    <div class="section-num">对比 1/3 · 指令微调原理</div>
+    <div class="section-title">指令微调：把命令行操作训练进权重</div>
+    <div class="cli-layout">
+      <div class="cli-terminal" id="cliTerminal">
+        <div class="cli-header">
+          <div class="cli-dot red"></div>
+          <div class="cli-dot yellow"></div>
+          <div class="cli-dot green"></div>
+        </div>
+        <div class="cli-line"><span class="cli-prompt">$</span> <span class="cli-cmd">git push origin main</span></div>
+        <div class="cli-line cli-output">→ 模型从权重中"回忆"如何执行 git 命令</div>
+        <div class="cli-line cli-output">→ 训练时见过类似示例，权重激活对应模式</div>
+        <div class="cli-line cli-warning">⚠ 操作模式已固化在模型参数里</div>
+        <div class="cli-line"><span class="cli-prompt">$</span> <span class="cli-cmd">pip install new-tool==2.0</span></div>
+        <div class="cli-line cli-error">✗ 模型权重里只有 1.0 版本的用法</div>
+        <div class="cli-line cli-error">✗ 无法识别新参数，执行失败</div>
+        <div class="cli-line cli-output">→ 必须重新标注数据 + 重新微调训练<span class="cli-cursor"></span></div>
+      </div>
+    </div>
+    <div class="page-num">04 / 12</div>
+  </div>
+</div>
+
+<!-- ========== 第5页：指令微调三大问题 ========== -->
+<div class="slide" data-slide="4">
+  <div class="slide-content">
+    <div class="section-num">对比 2/3 · 指令微调的根本问题</div>
+    <div class="section-title">三个根本问题，不是优化能解决的</div>
+    <div class="cli-problem-list" style="margin-top:40px;flex:1;align-content:center">
+      <div class="cli-problem">
+        <div class="cli-problem-icon">①</div>
+        <div class="cli-problem-body">
+          <h4>权重固化</h4>
+          <p>命令行工具版本一更新，训练进去的知识立刻过时。必须重新收集数据、重新微调，周期以月计。</p>
+        </div>
+      </div>
+      <div class="cli-problem">
+        <div class="cli-problem-icon">②</div>
+        <div class="cli-problem-body">
+          <h4>不可审计</h4>
+          <p>模型执行命令时，你无法知道它调用的是哪个工具的哪个版本。整个执行过程是黑箱，出错无法定位。</p>
+        </div>
+      </div>
+      <div class="cli-problem">
+        <div class="cli-problem-icon">③</div>
+        <div class="cli-problem-body">
+          <h4>不可组合</h4>
+          <p>每个新工具都要重新标数据、重新训练，成本极高。工具数量增长与训练成本线性绑定。</p>
+        </div>
+      </div>
+    </div>
+    <div class="page-num">05 / 12</div>
+  </div>
+</div>
+
+<!-- ========== 第6页：MCP原理 - 范式差异 ========== -->
+<div class="slide" data-slide="5">
+  <div class="slide-content">
+    <div class="section-num">对比 3/3 · MCP 范式</div>
+    <div class="section-title">MCP 的思路完全不同</div>
+    <div class="paradigm-layout">
+      <div class="paradigm-formula">
+        <span class="old">知识 → 权重</span>
+        <span class="arrow">→</span>
+        <span class="new">知识 → 协议</span>
+      </div>
+      <div class="paradigm-explain">
+        MCP 不把知识塞进权重，而是定义一个<strong>标准协议</strong>，让模型在运行时<strong>动态发现工具、调用工具</strong>。<br>
+        模型只负责理解意图和编排步骤，具体操作交给 MCP Server 执行。<br>
+        知识在<strong>协议层流动</strong>，不在权重里固化。
+      </div>
+      <div class="paradigm-conclusion">这是范式差异，不是优化差异</div>
+    </div>
+    <div class="page-num">06 / 12</div>
+  </div>
+</div>
+
+<!-- ========== 第7页：MCP三层架构 ========== -->
+<div class="slide" data-slide="6">
+  <div class="slide-content">
+    <div class="section-num">MCP 架构</div>
+    <div class="section-title">三层架构，职责分离</div>
+    <div class="arch-layout">
+      <div class="arch-diagram">
+        <div class="arch-layer host" id="archHost">
+          <div class="arch-layer-label">Host · 你的应用</div>
+          <div class="arch-node"><span class="node-icon">⚡</span>Claude</div>
+          <div class="arch-node"><span class="node-icon">⚡</span>Cursor</div>
+          <div class="arch-node"><span class="node-icon">⚡</span>TRAE</div>
+        </div>
+        <div class="arch-connector"></div>
+        <div class="arch-layer client" id="archClient">
+          <div class="arch-layer-label">Client · 协议通信</div>
+          <div class="arch-node"><span class="node-icon">🔄</span>MCP Client · 负责协议握手与消息路由</div>
+        </div>
+        <div class="arch-connector"></div>
+        <div class="arch-layer servers" id="archServers">
+          <div class="arch-layer-label">Server · 工具封装</div>
+          <div class="arch-server-grid">
+            <div class="arch-node"><span class="node-icon">📁</span>文件系统</div>
+            <div class="arch-node"><span class="node-icon">🗄️</span>PostgreSQL</div>
+            <div class="arch-node"><span class="node-icon">🌿</span>Git</div>
+            <div class="arch-node"><span class="node-icon">🌐</span>浏览器</div>
+            <div class="arch-node"><span class="node-icon">💬</span>Slack</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="page-num">07 / 12</div>
+  </div>
+</div>
+
+<!-- ========== 第8页：MCP三个原语 ========== -->
+<div class="slide" data-slide="7">
+  <div class="slide-content">
+    <div class="section-num">MCP 协议</div>
+    <div class="section-title">三个原语，与任意 Server 交互</div>
+    <div class="primitives-layout">
+      <div class="primitive-card">
+        <div class="primitive-icon">🔧</div>
+        <div class="primitive-name">Tools</div>
+        <div class="primitive-desc">模型可以调用的函数，带输入输出 schema。每个 Tool 定义清楚参数类型和返回结构。</div>
+        <div class="primitive-example">read_file(path) → string<br>git_commit(msg) → sha</div>
+      </div>
+      <div class="primitive-card">
+        <div class="primitive-icon">📚</div>
+        <div class="primitive-name">Resources</div>
+        <div class="primitive-desc">模型可以读取的数据源。文件、数据库表、API 返回值，统一抽象为可寻址资源。</div>
+        <div class="primitive-example">file:///repo/README.md<br>postgres://users/table</div>
+      </div>
+      <div class="primitive-card">
+        <div class="primitive-icon">📝</div>
+        <div class="primitive-name">Prompts</div>
+        <div class="primitive-desc">预定义的提示词模板，复用复杂指令。把高质量 Prompt 沉淀为可分享的资产。</div>
+        <div class="primitive-example">code-review-prompt<br>refactor-template</div>
+      </div>
+    </div>
+    <div class="page-num">08 / 12</div>
+  </div>
+</div>
+
+<!-- ========== 第9页：对比总结表 ========== -->
+<div class="slide" data-slide="8">
+  <div class="slide-content">
+    <div class="section-num">对比总结</div>
+    <div class="section-title">指令微调 vs MCP · 五维度对比</div>
+    <div class="compare-table-layout">
+      <table class="compare-table" id="compareTable">
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>指令微调（SFT）</th>
+            <th>MCP</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>知识位置</td>
+            <td>在模型权重里</td>
+            <td>在协议层流动</td>
+          </tr>
+          <tr>
+            <td>版本更新</td>
+            <td>工具升级需重新微调</td>
+            <td>Server 版本独立升级</td>
+          </tr>
+          <tr>
+            <td>可审计性</td>
+            <td>执行过程黑箱</td>
+            <td>全链路可审计</td>
+          </tr>
+          <tr>
+            <td>可组合性</td>
+            <td>每个工具都要重训</td>
+            <td>Server 即插即用</td>
+          </tr>
+          <tr>
+            <td>新增工具成本</td>
+            <td>高（标数据+训练）</td>
+            <td>零训练成本</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="compare-conclusion">这是范式差异，不是优化差异</div>
+    </div>
+    <div class="page-num">09 / 12</div>
+  </div>
+</div>
+
+<!-- ========== 第10页：MCP生态 ========== -->
+<div class="slide" data-slide="9">
+  <div class="slide-content">
+    <div class="section-num">MCP 生态</div>
+    <div class="section-title">生态正在爆发</div>
+    <div class="eco-layout">
+      <div class="eco-intro">官方 Server、社区 Server、原生支持应用，三类生态齐头并进</div>
+      <div class="eco-grid">
+        <div class="eco-card official">
+          <div class="eco-card-tag">官方</div>
+          <div class="eco-card-icon">📁</div>
+          <div class="eco-card-name">File System</div>
+          <div class="eco-card-desc">本地文件读写操作</div>
+        </div>
+        <div class="eco-card official">
+          <div class="eco-card-tag">官方</div>
+          <div class="eco-card-icon">🌿</div>
+          <div class="eco-card-name">Git</div>
+          <div class="eco-card-desc">仓库操作与版本管理</div>
+        </div>
+        <div class="eco-card official">
+          <div class="eco-card-tag">官方</div>
+          <div class="eco-card-icon">🗄️</div>
+          <div class="eco-card-name">PostgreSQL</div>
+          <div class="eco-card-desc">数据库查询与管理</div>
+        </div>
+        <div class="eco-card community">
+          <div class="eco-card-tag">社区</div>
+          <div class="eco-card-icon">🐙</div>
+          <div class="eco-card-name">GitHub</div>
+          <div class="eco-card-desc">Issue / PR / 仓库管理</div>
+        </div>
+        <div class="eco-card community">
+          <div class="eco-card-tag">社区</div>
+          <div class="eco-card-icon">📝</div>
+          <div class="eco-card-name">Notion</div>
+          <div class="eco-card-desc">文档与知识库操作</div>
+        </div>
+        <div class="eco-card community">
+          <div class="eco-card-tag">社区</div>
+          <div class="eco-card-icon">🎨</div>
+          <div class="eco-card-name">Figma</div>
+          <div class="eco-card-desc">设计文件读取与导出</div>
+        </div>
+        <div class="eco-card app">
+          <div class="eco-card-tag">应用</div>
+          <div class="eco-card-icon">⚡</div>
+          <div class="eco-card-name">Claude</div>
+          <div class="eco-card-desc">Anthropic 原生支持</div>
+        </div>
+        <div class="eco-card app">
+          <div class="eco-card-tag">应用</div>
+          <div class="eco-card-icon">⚡</div>
+          <div class="eco-card-name">Cursor / TRAE</div>
+          <div class="eco-card-desc">IDE 原生集成</div>
+        </div>
+      </div>
+      <div class="eco-warning">2026 年，不支持 MCP 的 AI 应用，等于没有工具调用能力</div>
+    </div>
+    <div class="page-num">10 / 12</div>
+  </div>
+</div>
+
+<!-- ========== 第11页：立场深化 - 为什么是必经之路 ========== -->
+<div class="slide" data-slide="10">
+  <div class="slide-content">
+    <div class="section-num">Tao 同学判断</div>
+    <div class="section-title">为什么 MCP 是必经之路</div>
+    <div class="paradigm-layout" style="gap:32px">
+      <div class="paradigm-explain" style="font-size:1.8rem">
+        指令微调解决的是<strong>教模型做事</strong>。<br>
+        MCP 解决的是<strong>让模型连接做事的能力</strong>。<br><br>
+        前者是<strong>内化</strong>，后者是<strong>外接</strong>。
+      </div>
+      <div class="paradigm-formula" style="font-size:2.4rem">
+        <span class="old">内化</span>
+        <span class="arrow">→</span>
+        <span class="new">外接</span>
+      </div>
+      <div class="paradigm-explain" style="font-size:1.5rem">
+        当工具数量<strong>指数增长</strong>，外接必然淘汰内化。<br>
+        这是架构层面的必然。
+      </div>
+      <div class="paradigm-conclusion" style="font-size:2rem">MCP 是 AI 操作的必经之路</div>
+    </div>
+    <div class="page-num">11 / 12</div>
+  </div>
+</div>
+
+<!-- ========== 第12页：结尾 ========== -->
+<div class="slide fullscreen-slide" data-slide="11">
+  <canvas class="fullscreen-canvas" id="outroCanvas"></canvas>
+  <div class="fullscreen-content">
+    <div class="outro-title">关注 Tao 同学</div>
+    <div class="outro-subtitle">MCP · AI 操作的必经之路</div>
+  </div>
+  <div class="outro-footer">
+    <div class="repo-label">所有知识分享网页均已开源 · 供大家学习</div>
+    <div class="repo-text">github.com/PoseZhaoyutao/zhimian-video-studio · knowledge-sharing/</div>
+    <div class="bottom-tag">我们下期见</div>
+  </div>
+  <div class="page-num">12 / 12</div>
+</div>
+
+</div>
+</div>
+
+<script>
+// ============ 舞台缩放 ============
+function scaleStage(){
+  const stage=document.querySelector('.slide-stage');
+  const sw=window.innerWidth,sh=window.innerHeight;
+  const scale=Math.min(sw/1920,sh/1080);
+  stage.style.transform=`scale(${scale})`;
+}
+scaleStage();
+window.addEventListener('resize',scaleStage);
+
+// ============ 配音实际时长（由 gen_audio_clone.py 写入 durations.json）============
+// 默认占位，录制脚本会覆盖为真实时长
+window.SLIDE_DURATIONS=[12000,10000,14000,16000,16000,14000,14000,16000,16000,18000,16000,12000];
+
+// ============ 页面激活时触发动画 ============
+const slideElements=document.querySelectorAll('.slide');
+slideElements.forEach((slide,index)=>{
+  slide.activate=function(){
+    // 触发该页所有动画元素
+    const animated=slide.querySelectorAll('.intro-title,.outro-title,.intro-subtitle,.outro-subtitle,.intro-footer,.outro-footer,.position-badge,.position-statement,.position-explain,.problem-intro,.path-card,.cli-terminal,.cli-line,.cli-problem,.paradigm-formula,.paradigm-explain,.paradigm-conclusion,.arch-layer,.primitive-card,.compare-table,.compare-conclusion,.eco-intro,.eco-card,.eco-warning,.compare-col,.compare-item');
+    animated.forEach((el,i)=>{
+      setTimeout(()=>el.classList.add('show'),i*80);
+    });
+  };
+  slide.deactivate=function(){
+    const animated=slide.querySelectorAll('.intro-title,.outro-title,.intro-subtitle,.outro-subtitle,.intro-footer,.outro-footer,.position-badge,.position-statement,.position-explain,.problem-intro,.path-card,.cli-terminal,.cli-line,.cli-problem,.paradigm-formula,.paradigm-explain,.paradigm-conclusion,.arch-layer,.primitive-card,.compare-table,.compare-conclusion,.eco-intro,.eco-card,.eco-warning,.compare-col,.compare-item');
+    animated.forEach(el=>el.classList.remove('show'));
+  };
+});
+
+// ============ 页面切换控制 ============
+window.AUTO_ADVANCE=true;
+window.goToSlide=function(index){
+  slideElements.forEach((slide,i)=>{
+    slide.classList.toggle('active',i===index);
+    if(i===index)slide.activate();
+    else slide.deactivate();
+  });
+  if(window.AUTO_ADVANCE){
+    clearTimeout(window.slideTimeout);
+    window.slideTimeout=setTimeout(()=>{
+      const next=(index+1)%slideElements.length;
+      window.goToSlide(next);
+    },window.SLIDE_DURATIONS[index]);
+  }
+};
+
+// 初始化第1页
+window.goToSlide(0);
+
+// ============ 开场/结尾 Canvas 粒子动画 ============
+function initParticleCanvas(canvasId){
+  const canvas=document.getElementById(canvasId);
+  if(!canvas)return;
+  canvas.width=1920;canvas.height=1080;
+  const ctx=canvas.getContext('2d');
+  const particles=[];
+  const colors=['#00d4ff','#a855f7','#00ff88','#ffd700'];
+  for(let i=0;i<80;i++){
+    particles.push({
+      x:Math.random()*1920,y:Math.random()*1080,
+      vx:(Math.random()-0.5)*0.5,vy:(Math.random()-0.5)*0.5,
+      r:Math.random()*3+1,color:colors[Math.floor(Math.random()*colors.length)],
+      alpha:Math.random()*0.5+0.2
+    });
+  }
+  function draw(){
+    ctx.fillStyle='rgba(10,14,26,0.15)';
+    ctx.fillRect(0,0,1920,1080);
+    particles.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;
+      if(p.x<0||p.x>1920)p.vx*=-1;
+      if(p.y<0||p.y>1080)p.vy*=-1;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=p.color;
+      ctx.globalAlpha=p.alpha;
+      ctx.fill();
+    });
+    // 连线
+    ctx.globalAlpha=0.15;
+    for(let i=0;i<particles.length;i++){
+      for(let j=i+1;j<particles.length;j++){
+        const dx=particles[i].x-particles[j].x;
+        const dy=particles[i].y-particles[j].y;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        if(dist<150){
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x,particles[i].y);
+          ctx.lineTo(particles[j].x,particles[j].y);
+          ctx.strokeStyle=particles[i].color;
+          ctx.lineWidth=0.5;
+          ctx.stroke();
+        }
+      }
+    }
+    ctx.globalAlpha=1;
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+initParticleCanvas('introCanvas');
+initParticleCanvas('outroCanvas');
+</script>
+
+</body>
+</html>
