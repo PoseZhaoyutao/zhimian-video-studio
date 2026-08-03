@@ -20,8 +20,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Se
 .slide.active{opacity:1;visibility:visible;z-index:2}
 .slide-content{width:100%;height:100%;position:relative;padding:60px 100px;display:flex;flex-direction:column}
 .page-num{position:absolute;bottom:30px;right:50px;font-size:1rem;color:var(--text-dim);font-family:Consolas,monospace;letter-spacing:2px;z-index:10;opacity:.6}
-.section-num{font-size:1rem;color:var(--cyan);font-weight:600;letter-spacing:3px;text-transform:uppercase}
-.section-title{font-size:3.5rem;font-weight:800;color:var(--text-bright);margin:10px 0 16px;line-height:1.15}
+.section-num{font-size:1.1rem;color:var(--cyan);font-weight:600;letter-spacing:3px;text-transform:uppercase}
+.section-title{font-size:4rem;font-weight:800;color:var(--text-bright);margin:10px 0 16px;line-height:1.15;text-shadow:0 0 30px rgba(0,212,255,.3)}
 .section-subtitle{font-size:1.4rem;color:var(--text-dim);max-width:1400px}
 
 /* 开场/结尾 */
@@ -455,6 +455,127 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Se
   90%{opacity:.6}
   to{transform:translateY(-20px);opacity:0}
 }
+
+/* ============ 增强动画效果 ============ */
+/* 结论框脉冲发光 */
+.conclusion-box.show{
+  animation:conclusion-glow 2.5s ease-in-out infinite;
+}
+@keyframes conclusion-glow{
+  0%,100%{box-shadow:0 0 20px rgba(0,212,255,.2);border-color:var(--cyan)}
+  50%{box-shadow:0 0 40px rgba(0,212,255,.5);border-color:var(--green)}
+}
+
+/* 数据流箭头流动效果 */
+.flow-arrow{
+  position:relative;overflow:hidden;
+}
+.flow-arrow::before{
+  content:'';position:absolute;top:0;left:-100%;width:50%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.6),transparent);
+  animation:flow-stream 2s ease-in-out infinite;
+}
+@keyframes flow-stream{
+  0%{left:-100%}
+  100%{left:200%}
+}
+
+/* 用户球体呼吸光晕 */
+.user-orb{
+  animation:orb-breathe 3s ease-in-out infinite;
+}
+@keyframes orb-breathe{
+  0%,100%{box-shadow:0 0 40px rgba(0,212,255,.3)}
+  50%{box-shadow:0 0 60px rgba(0,212,255,.6),0 0 80px rgba(168,85,247,.3)}
+}
+.user-orb.user-b{
+  animation:orb-breathe-b 3s ease-in-out infinite;
+}
+@keyframes orb-breathe-b{
+  0%,100%{box-shadow:0 0 40px rgba(168,85,247,.3)}
+  50%{box-shadow:0 0 60px rgba(168,85,247,.6),0 0 80px rgba(0,212,255,.3)}
+}
+
+/* 信息卡片悬浮微动 */
+.info-card.show{
+  animation:card-glow 3s ease-in-out infinite;
+}
+@keyframes card-glow{
+  0%,100%{box-shadow:0 0 15px rgba(0,212,255,.15)}
+  50%{box-shadow:0 0 30px rgba(0,212,255,.35)}
+}
+
+/* 隔离墙闪烁 */
+.isolation-wall{
+  animation:wall-flicker 1.5s ease-in-out infinite;
+}
+@keyframes wall-flicker{
+  0%,100%{opacity:.7;border-color:var(--red)}
+  50%{opacity:1;border-color:var(--orange);box-shadow:0 0 20px rgba(239,68,68,.4)}
+}
+
+/* KV Cache重建单元格脉冲 */
+.cache-cell.rebuild{
+  animation:rebuild-pulse .8s ease infinite;
+}
+
+/* 原则卡片序号发光 */
+.principle-num{
+  animation:num-glow 2s ease-in-out infinite;
+}
+@keyframes num-glow{
+  0%,100%{box-shadow:0 0 15px rgba(0,212,255,.3)}
+  50%{box-shadow:0 0 25px rgba(0,212,255,.6)}
+}
+
+/* 切换箭头增强脉冲 */
+.switch-arrow{
+  animation:switch-pulse 1.2s ease-in-out infinite;
+}
+
+/* 召回条形图流动光泽 */
+.recall-bar-fill.show{
+  background-size:200% 100%;
+  animation:bar-shimmer 2s ease-in-out infinite;
+}
+.recall-bar.kw .recall-bar-fill.show{background:linear-gradient(90deg,var(--cyan),var(--cyan),rgba(0,212,255,.4),var(--cyan));background-size:200% 100%}
+.recall-bar.vec .recall-bar-fill.show{background:linear-gradient(90deg,var(--purple),var(--purple),rgba(168,85,247,.4),var(--purple));background-size:200% 100%}
+.recall-bar.time .recall-bar-fill.show{background:linear-gradient(90deg,var(--green),var(--green),rgba(0,255,136,.4),var(--green));background-size:200% 100%}
+@keyframes bar-shimmer{
+  0%{background-position:200% 0}
+  100%{background-position:-200% 0}
+}
+
+/* 窗口仪表流动 */
+.window-meter-fill.show{
+  background-size:200% 100%;
+  animation:meter-flow 3s ease-in-out infinite;
+}
+@keyframes meter-flow{
+  0%{background-position:0% 0}
+  100%{background-position:200% 0}
+}
+
+/* 三层架构层标签发光 */
+.layer-label{
+  animation:label-glow 3s ease-in-out infinite;
+}
+.layer-label.strategy{animation-delay:0s}
+.layer-label.dispatch{animation-delay:.5s}
+.layer-label.physical{animation-delay:1s}
+@keyframes label-glow{
+  0%,100%{box-shadow:0 0 10px rgba(168,85,247,.2)}
+  50%{box-shadow:0 0 25px rgba(0,212,255,.4)}
+}
+
+/* 开场标题持续发光 */
+.intro-title.show,.outro-title.show{
+  animation:title-glow 3s ease-in-out infinite;
+}
+@keyframes title-glow{
+  0%,100%{filter:drop-shadow(0 0 20px rgba(0,212,255,.4))}
+  50%{filter:drop-shadow(0 0 40px rgba(168,85,247,.6))}
+}
 </style>
 </head>
 <body>
@@ -714,6 +835,26 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Se
         <div class="switch-layer-tag l1">① 上下文隔离</div>
         <div class="switch-layer-tag l2">② KV Cache 失效</div>
         <div class="switch-layer-tag l3">③ 项目状态重新召回</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:20px">
+      <div class="info-card" style="padding:20px">
+        <div style="font-size:2rem;margin-bottom:8px">🛡️</div>
+        <h3 style="font-size:1.3rem;color:var(--cyan);margin-bottom:8px">上下文隔离</h3>
+        <p style="font-size:1rem;color:var(--text);line-height:1.6">用户A的对话历史不能进入用户B的上下文窗口，这是<strong style="color:var(--red)">安全基线</strong>。</p>
+        <p style="font-size:.9rem;color:var(--text-dim);margin-top:8px;font-family:Consolas,monospace">出错 = 数据泄漏</p>
+      </div>
+      <div class="info-card" style="padding:20px;transition-delay:.15s">
+        <div style="font-size:2rem;margin-bottom:8px">❄️</div>
+        <h3 style="font-size:1.3rem;color:var(--green);margin-bottom:8px">KV Cache 失效</h3>
+        <p style="font-size:1rem;color:var(--text);line-height:1.6">前缀不同，缓存全部miss，必须重建，<strong style="color:var(--yellow)">冷启动延迟</strong>。</p>
+        <p style="font-size:.9rem;color:var(--text-dim);margin-top:8px;font-family:Consolas,monospace">首token延迟 50ms → 800ms+</p>
+      </div>
+      <div class="info-card" style="padding:20px;transition-delay:.3s">
+        <div style="font-size:2rem;margin-bottom:8px">📦</div>
+        <h3 style="font-size:1.3rem;color:var(--yellow);margin-bottom:8px">项目状态重召</h3>
+        <p style="font-size:1rem;color:var(--text);line-height:1.6">项目上下文需从记忆库重新召回，<strong style="color:var(--orange)">暖启动 vs 冷启动</strong>。</p>
+        <p style="font-size:.9rem;color:var(--text-dim);margin-top:8px;font-family:Consolas,monospace">记忆库为空 = 上下文丢失</p>
       </div>
     </div>
     <div class="page-num">07 / 12</div>
