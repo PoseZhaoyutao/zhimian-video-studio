@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>上下文管理·记忆·KV Cache：AI如何记住你</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0e1a; --bg2:#111638; --surface:#161b3d;
+  --cyan:#00d4ff; --purple:#a855f7; --green:#00ff88;
+  --yellow:#ffd700; --red:#ef4444; --orange:#ff8c00;
+  --text:#e2e8f0; --text-dim:#8892b0; --text-bright:#fff;
+  --border:rgba(0,212,255,0.18);
+}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Segoe UI','Microsoft YaHei',system-ui,sans-serif}
+.viewport{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.slide-stage{width:1920px;height:1080px;position:relative;transform-origin:center center;flex-shrink:0}
+.slide{position:absolute;inset:0;width:1920px;height:1080px;opacity:0;visibility:hidden;transition:opacity .5s ease,visibility .5s;overflow:hidden}
+.slide.active{opacity:1;visibility:visible;z-index:2}
+.slide-content{width:100%;height:100%;position:relative;padding:60px 100px;display:flex;flex-direction:column}
+.page-num{position:absolute;bottom:30px;right:50px;font-size:1rem;color:var(--text-dim);font-family:Consolas,monospace;letter-spacing:2px;z-index:10;opacity:.6}
+.section-num{font-size:1rem;color:var(--cyan);font-weight:600;letter-spacing:3px;text-transform:uppercase}
+.section-title{font-size:3.5rem;font-weight:800;color:var(--text-bright);margin:10px 0 16px;line-height:1.15}
+.section-subtitle{font-size:1.4rem;color:var(--text-dim);max-width:1400px}
+
+/* 开场/结尾 */
+.fullscreen-slide .slide-content{padding:0;align-items:center;justify-content:center;text-align:center}
+.fullscreen-canvas{position:absolute;inset:0;width:1920px;height:1080px;z-index:0}
+.fullscreen-content{position:relative;z-index:2;text-align:center;top:50%;transform:translateY(-60%)}
+.intro-title,.outro-title{
+  font-size:6rem;font-weight:900;
+  background:linear-gradient(135deg,#00d4ff 0%,#a855f7 50%,#00ff88 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  opacity:0;transform:translateY(40px) scale(.9);
+  transition:all 1s cubic-bezier(.34,1.56,.64,1);
+}
+.intro-title.show,.outro-title.show{opacity:1;transform:translateY(0) scale(1)}
+.intro-subtitle,.outro-subtitle{
+  font-size:2rem;color:var(--text-dim);margin-top:24px;
+  opacity:0;transition:all .8s ease .4s;
+}
+.intro-subtitle.show,.outro-subtitle.show{opacity:1;transform:translateY(0)}
+.intro-footer,.outro-footer{
+  position:absolute;bottom:60px;left:50%;transform:translateX(-50%);
+  font-size:1rem;color:var(--text-dim);opacity:0;transition:all .8s ease .8s;
+  font-family:Consolas,monospace;letter-spacing:1px;
+}
+.intro-footer.show,.outro-footer.show{opacity:.8}
+
+/* 通用卡片 */
+.info-card{
+  background:linear-gradient(135deg,rgba(22,27,61,.7),rgba(17,22,56,.5));
+  border:1px solid var(--border);border-radius:16px;padding:24px 28px;
+  backdrop-filter:blur(10px);
+  opacity:0;transform:translateY(30px);
+  transition:all .6s cubic-bezier(.34,1.56,.64,1);
+}
+.info-card.show{opacity:1;transform:translateY(0)}
+
+/* 通用结论框 */
+.conclusion-box{
+  font-size:1.6rem;font-weight:700;color:var(--cyan);text-align:center;
+  padding:18px 36px;border:2px solid var(--cyan);border-radius:14px;
+  background:rgba(0,212,255,.05);margin:20px auto;max-width:1400px;
+  opacity:0;transform:scale(.9);
+  transition:all .7s cubic-bezier(.34,1.56,.64,1) .8s;
+}
+.conclusion-box.show{opacity:1;transform:scale(1)}
+
+/* ============ 第2页：三层架构图 ============ */
+.three-layer-stack{
+  display:flex;flex-direction:column;gap:18px;margin:30px 0;flex:1;justify-content:center;
+}
+.layer-row{
+  display:flex;align-items:stretch;gap:24px;
+  opacity:0;transform:translateX(-50px);
+  transition:all .7s cubic-bezier(.34,1.56,.64,1);
+}
+.layer-row.show{opacity:1;transform:translateX(0)}
+.layer-row:nth-child(2){transition-delay:.2s}
+.layer-row:nth-child(3){transition-delay:.4s}
+.layer-label{
+  width:260px;flex-shrink:0;padding:20px 24px;border-radius:14px;
+  display:flex;flex-direction:column;justify-content:center;
+}
+.layer-label.strategy{background:linear-gradient(135deg,rgba(168,85,247,.25),rgba(168,85,247,.08));border:1px solid var(--purple)}
+.layer-label.dispatch{background:linear-gradient(135deg,rgba(0,212,255,.25),rgba(0,212,255,.08));border:1px solid var(--cyan)}
+.layer-label.physical{background:linear-gradient(135deg,rgba(0,255,136,.25),rgba(0,255,136,.08));border:1px solid var(--green)}
+.layer-name{font-size:1.8rem;font-weight:800;color:var(--text-bright)}
+.layer-role{font-size:.95rem;color:var(--text-dim);margin-top:4px}
+.layer-card{
+  flex:1;background:rgba(22,27,61,.6);border:1px solid var(--border);border-radius:14px;
+  padding:20px 28px;display:flex;flex-direction:column;justify-content:center;
+}
+.layer-card h3{font-size:1.3rem;color:var(--text-bright);margin-bottom:8px}
+.layer-card p{font-size:1.05rem;color:var(--text);line-height:1.6}
+.layer-card .duration{font-size:.9rem;color:var(--text-dim);margin-top:6px;font-family:Consolas,monospace}
+
+/* ============ 第3页：记忆双层 ============ */
+.memory-layout{display:flex;gap:30px;margin:24px 0;flex:1}
+.memory-col{flex:1;display:flex;flex-direction:column;gap:16px}
+.memory-card{
+  background:rgba(22,27,61,.6);border:1px solid var(--border);border-radius:16px;padding:24px;
+  opacity:0;transform:translateY(30px);
+  transition:all .6s cubic-bezier(.34,1.56,.64,1);
+}
+.memory-card.show{opacity:1;transform:translateY(0)}
+.memory-card.short{border-left:4px solid var(--cyan)}
+.memory-card.long{border-left:4px solid var(--purple)}
+.memory-card h3{font-size:1.6rem;color:var(--text-bright);margin-bottom:10px}
+.memory-card .meta{font-size:.9rem;color:var(--text-dim);font-family:Consolas,monospace;margin-bottom:10px}
+.memory-card p{font-size:1.05rem;color:var(--text);line-height:1.7}
+.recall-demo{
+  margin-top:18px;padding:16px;background:rgba(0,0,0,.3);border-radius:10px;
+  border:1px dashed var(--border);
+}
+.recall-demo h4{font-size:1rem;color:var(--yellow);margin-bottom:10px}
+.recall-bars{display:flex;flex-direction:column;gap:6px}
+.recall-bar{display:flex;align-items:center;gap:10px;font-size:.85rem;color:var(--text-dim)}
+.recall-bar-track{flex:1;height:8px;background:rgba(255,255,255,.05);border-radius:4px;overflow:hidden}
+.recall-bar-fill{height:100%;border-radius:4px;opacity:0;transition:width 1s ease .3s}
+.recall-bar-fill.show{opacity:1}
+.recall-bar.kw .recall-bar-fill{background:var(--cyan);width:75%}
+.recall-bar.vec .recall-bar-fill{background:var(--purple);width:88%}
+.recall-bar.time .recall-bar-fill{background:var(--green);width:60%}
+
+/* ============ 第4页：上下文窗口 ============ */
+.context-window-demo{margin:24px 0;flex:1;display:flex;flex-direction:column;justify-content:center;gap:20px}
+.context-block{
+  background:rgba(22,27,61,.6);border:1px solid var(--border);border-radius:12px;
+  padding:18px 24px;display:flex;align-items:center;gap:20px;
+  opacity:0;transform:translateX(-40px);
+  transition:all .6s cubic-bezier(.34,1.56,.64,1);
+}
+.context-block.show{opacity:1;transform:translateX(0)}
+.context-block:nth-child(2){transition-delay:.15s}
+.context-block:nth-child(3){transition-delay:.3s}
+.context-block:nth-child(4){transition-delay:.45s}
+.context-tag{
+  width:180px;flex-shrink:0;padding:10px 16px;border-radius:8px;text-align:center;
+  font-weight:700;font-size:1.05rem;
+}
+.context-tag.system{background:rgba(168,85,247,.2);border:1px solid var(--purple);color:var(--purple)}
+.context-tag.history{background:rgba(0,212,255,.2);border:1px solid var(--cyan);color:var(--cyan)}
+.context-tag.input{background:rgba(0,255,136,.2);border:1px solid var(--green);color:var(--green)}
+.context-tag.clipped{background:rgba(239,68,68,.15);border:1px solid var(--red);color:var(--red);text-decoration:line-through}
+.context-content{flex:1;color:var(--text);font-size:1.05rem;line-height:1.6}
+.context-size{font-size:.85rem;color:var(--text-dim);font-family:Consolas,monospace}
+.window-meter{
+  background:rgba(0,0,0,.3);border-radius:12px;padding:16px 24px;border:1px solid var(--border);
+}
+.window-meter-label{display:flex;justify-content:space-between;font-size:.9rem;color:var(--text-dim);margin-bottom:8px}
+.window-meter-bar{height:14px;background:rgba(255,255,255,.05);border-radius:7px;overflow:hidden;position:relative}
+.window-meter-fill{
+  height:100%;background:linear-gradient(90deg,var(--green),var(--cyan),var(--yellow),var(--red));
+  width:0;transition:width 1.2s ease .6s;border-radius:7px;
+}
+.window-meter-fill.show{width:85%}
+.window-meter-mark{position:absolute;right:15%;top:-4px;font-size:.8rem;color:var(--red);font-family:Consolas,monospace}
+
+/* ============ 第5页：KV Cache物理结构 ============ */
+.kvcache-layout{display:flex;gap:30px;margin:20px 0;flex:1}
+.kvcache-left{flex:1.2;display:flex;flex-direction:column;gap:16px}
+.kvcache-right{flex:1;display:flex;flex-direction:column;gap:14px}
+.kv-formula{
+  background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:12px;
+  padding:20px 24px;text-align:center;
+  opacity:0;transform:scale(.9);transition:all .6s ease;
+}
+.kv-formula.show{opacity:1;transform:scale(1)}
+.kv-formula-text{font-family:Consolas,monospace;font-size:1.4rem;color:var(--green)}
+.kv-formula-text strong{color:var(--yellow)}
+.kv-formula-note{font-size:.9rem;color:var(--text-dim);margin-top:8px}
+.kv-grid{
+  background:rgba(22,27,61,.6);border:1px solid var(--border);border-radius:12px;padding:20px;
+  opacity:0;transform:translateY(20px);transition:all .6s ease .2s;
+}
+.kv-grid.show{opacity:1;transform:translateY(0)}
+.kv-grid h4{font-size:1rem;color:var(--cyan);margin-bottom:12px}
+.kv-cell-row{display:flex;gap:4px;margin-bottom:4px}
+.kv-cell{
+  flex:1;height:20px;border-radius:3px;background:rgba(0,255,136,.15);border:1px solid rgba(0,255,136,.3);
+  opacity:0;transition:opacity .3s ease;
+}
+.kv-cell.cached{background:rgba(0,255,136,.6);border-color:var(--green);opacity:1;box-shadow:0 0 6px rgba(0,255,136,.4)}
+.kv-cell.new{background:rgba(255,215,0,.6);border-color:var(--yellow);opacity:1;box-shadow:0 0 6px rgba(255,215,0,.4)}
+.kv-legend{display:flex;gap:16px;margin-top:12px;font-size:.85rem;color:var(--text-dim)}
+.kv-legend span{display:flex;align-items:center;gap:6px}
+.kv-legend-dot{width:12px;height:12px;border-radius:3px}
+.kv-size-card{
+  background:rgba(22,27,61,.6);border:1px solid var(--border);border-radius:12px;padding:18px;
+  opacity:0;transform:translateX(30px);transition:all .6s ease .3s;
+}
+.kv-size-card.show{opacity:1;transform:translateX(0)}
+.kv-size-card h4{font-size:1.05rem;color:var(--text-bright);margin-bottom:8px}
+.kv-size-card .formula{font-family:Consolas,monospace;font-size:1rem;color:var(--cyan);margin:6px 0}
+.kv-size-card .example{font-size:.95rem;color:var(--text);margin-top:8px;line-height:1.5}
+.kv-size-card .example strong{color:var(--yellow)}
+
+/* ============ 第6页：三者关系数据流 ============ */
+.flow-diagram{margin:20px 0;flex:1;display:flex;flex-direction:column;justify-content:center;gap:24px}
+.flow-row{
+  display:flex;align-items:center;gap:20px;
+  opacity:0;transform:translateY(30px);
+  transition:all .7s cubic-bezier(.34,1.56,.64,1);
+}
+.flow-row.show{opacity:1;transform:translateY(0)}
+.flow-row:nth-child(2){transition-delay:.3s}
+.flow-row:nth-child(3){transition-delay:.6s}
+.flow-row:nth-child(4){transition-delay:.9s}
+.flow-node{
+  width:220px;flex-shrink:0;padding:18px 20px;border-radius:12px;text-align:center;
+  border:2px solid;
+}
+.flow-node.memory{border-color:var(--purple);background:rgba(168,85,247,.12)}
+.flow-node.context{border-color:var(--cyan);background:rgba(0,212,255,.12)}
+.flow-node.kvcache{border-color:var(--green);background:rgba(0,255,136,.12)}
+.flow-node h4{font-size:1.2rem;color:var(--text-bright);margin-bottom:4px}
+.flow-node .action{font-size:.9rem;color:var(--text-dim);font-family:Consolas,monospace}
+.flow-arrow{
+  flex:1;height:3px;background:linear-gradient(90deg,var(--purple),var(--cyan));
+  position:relative;border-radius:2px;
+}
+.flow-arrow::after{
+  content:'';position:absolute;right:-2px;top:50%;transform:translateY(-50%);
+  border:6px solid transparent;border-left-color:var(--cyan);
+}
+.flow-arrow.cyan-green{background:linear-gradient(90deg,var(--cyan),var(--green))}
+.flow-arrow.cyan-green::after{border-left-color:var(--green)}
+.flow-result{
+  flex:1;padding:14px 20px;background:rgba(22,27,61,.6);border:1px solid var(--border);border-radius:10px;
+  color:var(--text);font-size:1rem;
+}
+.flow-result strong{color:var(--yellow)}
+.coupling-points{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:8px;
+}
+.coupling-card{
+  background:rgba(22,27,61,.5);border:1px solid var(--border);border-left:3px solid var(--yellow);
+  border-radius:8px;padding:14px 16px;
+  opacity:0;transform:translateY(20px);transition:all .5s ease 1.2s;
+}
+.coupling-card.show{opacity:1;transform:translateY(0)}
+.coupling-card h5{font-size:.95rem;color:var(--yellow);margin-bottom:6px}
+.coupling-card p{font-size:.9rem;color:var(--text);line-height:1.5}
+
+/* ============ 第7页：切换用户引入 ============ */
+.switch-intro{margin:30px 0;flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:40px}
+.switch-scene{
+  display:flex;align-items:center;gap:60px;
+  opacity:0;transform:scale(.9);transition:all .8s cubic-bezier(.34,1.56,.64,1);
+}
+.switch-scene.show{opacity:1;transform:scale(1)}
+.user-orb{
+  width:160px;height:160px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:2rem;font-weight:800;color:var(--text-bright);
+  box-shadow:0 0 40px rgba(0,212,255,.3);
+}
+.user-orb.user-a{background:radial-gradient(circle,rgba(0,212,255,.4),rgba(0,212,255,.1));border:2px solid var(--cyan)}
+.user-orb.user-b{background:radial-gradient(circle,rgba(168,85,247,.4),rgba(168,85,247,.1));border:2px solid var(--purple)}
+.switch-arrow{
+  font-size:3rem;color:var(--yellow);
+  animation:switch-pulse 1.5s ease-in-out infinite;
+}
+@keyframes switch-pulse{
+  0%,100%{transform:scale(1);opacity:.7}
+  50%{transform:scale(1.2);opacity:1}
+}
+.switch-question{
+  font-size:2rem;color:var(--text-bright);text-align:center;line-height:1.5;
+  opacity:0;transition:all .8s ease .5s;
+}
+.switch-question.show{opacity:1}
+.switch-question strong{color:var(--yellow)}
+.switch-layers{
+  display:flex;gap:20px;
+  opacity:0;transition:all .8s ease 1s;
+}
+.switch-layers.show{opacity:1}
+.switch-layer-tag{
+  padding:10px 24px;border-radius:30px;font-size:1.1rem;font-weight:600;
+  border:1px solid;
+}
+.switch-layer-tag.l1{border-color:var(--cyan);color:var(--cyan);background:rgba(0,212,255,.08)}
+.switch-layer-tag.l2{border-color:var(--green);color:var(--green);background:rgba(0,255,136,.08)}
+.switch-layer-tag.l3{border-color:var(--yellow);color:var(--yellow);background:rgba(255,215,0,.08)}
+
+/* ============ 第8页：上下文隔离 ============ */
+.isolation-layout{display:flex;flex-direction:column;gap:20px;margin:24px 0;flex:1}
+.isolation-demo{
+  display:flex;gap:40px;justify-content:center;
+  opacity:0;transition:all .7s ease;
+}
+.isolation-demo.show{opacity:1}
+.user-context{
+  width:380px;background:rgba(22,27,61,.6);border:2px solid;border-radius:16px;padding:20px;
+}
+.user-context.ua{border-color:var(--cyan)}
+.user-context.ub{border-color:var(--purple)}
+.user-context-header{display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:1.2rem;font-weight:700}
+.user-context.ua .user-context-header{color:var(--cyan)}
+.user-context.ub .user-context-header{color:var(--purple)}
+.context-line{
+  padding:8px 12px;margin-bottom:6px;border-radius:6px;font-size:.9rem;
+  background:rgba(0,0,0,.3);border-left:3px solid;
+  opacity:0;transform:translateX(-20px);transition:all .4s ease;
+}
+.user-context.ua .context-line{border-left-color:var(--cyan)}
+.user-context.ub .context-line{border-left-color:var(--purple)}
+.isolation-demo.show .context-line{opacity:1;transform:translateX(0)}
+.isolation-demo.show .context-line:nth-child(2){transition-delay:.1s}
+.isolation-demo.show .context-line:nth-child(3){transition-delay:.2s}
+.isolation-demo.show .context-line:nth-child(4){transition-delay:.3s}
+.isolation-demo.show .context-line:nth-child(5){transition-delay:.4s}
+.isolation-wall{
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.4rem;color:var(--red);font-weight:800;letter-spacing:3px;
+  writing-mode:vertical-rl;text-orientation:upright;
+  padding:20px 12px;border:2px dashed var(--red);border-radius:12px;
+  background:rgba(239,68,68,.05);
+}
+.isolation-rule{
+  background:rgba(239,68,68,.08);border:1px solid var(--red);border-radius:12px;
+  padding:16px 24px;text-align:center;font-size:1.15rem;color:var(--text);
+  opacity:0;transform:translateY(20px);transition:all .6s ease .8s;
+}
+.isolation-rule.show{opacity:1;transform:translateY(0)}
+.isolation-rule strong{color:var(--red)}
+
+/* ============ 第9页：KV Cache失效 ============ */
+.invalidation-layout{display:flex;flex-direction:column;gap:20px;margin:20px 0;flex:1}
+.cache-compare{display:flex;gap:30px;flex:1}
+.cache-side{
+  flex:1;background:rgba(22,27,61,.6);border:1px solid var(--border);border-radius:14px;padding:20px;
+  display:flex;flex-direction:column;
+  opacity:0;transform:translateY(30px);transition:all .6s cubic-bezier(.34,1.56,.64,1);
+}
+.cache-side.show{opacity:1;transform:translateY(0)}
+.cache-side.valid{border-color:var(--green)}
+.cache-side.invalid{border-color:var(--red)}
+.cache-side h3{font-size:1.3rem;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.cache-side.valid h3{color:var(--green)}
+.cache-side.invalid h3{color:var(--red)}
+.cache-status{font-size:.85rem;font-family:Consolas,monospace;margin-bottom:12px;padding:6px 10px;border-radius:6px;background:rgba(0,0,0,.3)}
+.cache-prefix{font-size:.9rem;color:var(--text-dim);margin-bottom:8px;font-family:Consolas,monospace}
+.cache-cells{display:flex;gap:3px;margin-bottom:12px;min-height:28px}
+.cache-cell{
+  width:24px;height:24px;border-radius:4px;border:1px solid;
+}
+.cache-cell.hit{background:rgba(0,255,136,.5);border-color:var(--green)}
+.cache-cell.miss{background:rgba(239,68,68,.4);border-color:var(--red);opacity:.4}
+.cache-cell.rebuild{background:rgba(255,215,0,.4);border-color:var(--yellow);animation:rebuild-pulse .8s ease infinite}
+@keyframes rebuild-pulse{
+  0%,100%{opacity:.5}
+  50%{opacity:1}
+}
+.cache-latency{
+  margin-top:auto;padding:10px 14px;border-radius:8px;font-size:.95rem;
+  background:rgba(0,0,0,.3);
+}
+.cache-latency strong{font-family:Consolas,monospace}
+.cache-side.valid .cache-latency{color:var(--green)}
+.cache-side.invalid .cache-latency{color:var(--red)}
+.cold-start-note{
+  background:rgba(255,215,0,.08);border:1px solid var(--yellow);border-radius:12px;
+  padding:16px 24px;display:flex;align-items:center;gap:16px;
+  opacity:0;transform:translateY(20px);transition:all .6s ease 1s;
+}
+.cold-start-note.show{opacity:1;transform:translateY(0)}
+.cold-start-note .icon{font-size:2rem}
+.cold-start-note .text{flex:1;font-size:1.05rem;color:var(--text)}
+.cold-start-note .text strong{color:var(--yellow)}
+
+/* ============ 第10页：项目状态影响 ============ */
+.project-impact-layout{display:flex;flex-direction:column;gap:18px;margin:20px 0;flex:1}
+.scenario-compare{display:flex;gap:24px;flex:1}
+.scenario-card{
+  flex:1;background:rgba(22,27,61,.6);border:1px solid var(--border);border-radius:14px;padding:22px;
+  display:flex;flex-direction:column;
+  opacity:0;transform:translateY(30px);transition:all .6s cubic-bezier(.34,1.56,.64,1);
+}
+.scenario-card.show{opacity:1;transform:translateY(0)}
+.scenario-card.warm{border-left:4px solid var(--green)}
+.scenario-card.cold{border-left:4px solid var(--orange)}
+.scenario-card h3{font-size:1.3rem;color:var(--text-bright);margin-bottom:6px}
+.scenario-card .cond{font-size:.9rem;color:var(--text-dim);margin-bottom:14px;font-family:Consolas,monospace}
+.scenario-flow{display:flex;flex-direction:column;gap:8px;flex:1}
+.scenario-step{
+  display:flex;align-items:center;gap:10px;font-size:.95rem;color:var(--text);
+  padding:8px 12px;background:rgba(0,0,0,.2);border-radius:8px;
+}
+.scenario-step .num{
+  width:22px;height:22px;border-radius:50%;background:var(--cyan);color:#000;
+  display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0;
+}
+.scenario-card.cold .scenario-step .num{background:var(--orange)}
+.scenario-result{
+  margin-top:14px;padding:12px 16px;border-radius:8px;font-size:.95rem;
+  background:rgba(0,0,0,.3);
+}
+.scenario-card.warm .scenario-result{color:var(--green);border-left:3px solid var(--green)}
+.scenario-card.cold .scenario-result{color:var(--orange);border-left:3px solid var(--orange)}
+.impact-conclusion{
+  background:rgba(0,212,255,.08);border:1px solid var(--cyan);border-radius:12px;
+  padding:16px 24px;text-align:center;font-size:1.1rem;color:var(--text);
+  opacity:0;transform:translateY(20px);transition:all .6s ease .9s;
+}
+.impact-conclusion.show{opacity:1;transform:translateY(0)}
+.impact-conclusion strong{color:var(--cyan)}
+
+/* ============ 第11页：设计原则 ============ */
+.principles-grid{
+  display:grid;grid-template-columns:repeat(2,1fr);gap:20px;margin:24px 0;flex:1;
+}
+.principle-card{
+  background:linear-gradient(135deg,rgba(22,27,61,.7),rgba(17,22,56,.5));
+  border:1px solid var(--border);border-radius:16px;padding:24px 28px;
+  display:flex;gap:18px;
+  opacity:0;transform:translateY(30px);
+  transition:all .6s cubic-bezier(.34,1.56,.64,1);
+}
+.principle-card.show{opacity:1;transform:translateY(0)}
+.principle-card:nth-child(2){transition-delay:.1s}
+.principle-card:nth-child(3){transition-delay:.2s}
+.principle-card:nth-child(4){transition-delay:.3s}
+.principle-num{
+  width:56px;height:56px;flex-shrink:0;border-radius:50%;
+  background:linear-gradient(135deg,var(--cyan),var(--purple));
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.6rem;font-weight:800;color:#000;
+}
+.principle-body h3{font-size:1.25rem;color:var(--text-bright);margin-bottom:8px}
+.principle-body p{font-size:1rem;color:var(--text);line-height:1.6}
+.principle-body .tag{display:inline-block;margin-top:8px;padding:3px 10px;border-radius:12px;font-size:.8rem;font-family:Consolas,monospace}
+.principle-body .tag.isolation{background:rgba(0,212,255,.15);color:var(--cyan)}
+.principle-body .tag.bucket{background:rgba(0,255,136,.15);color:var(--green)}
+.principle-body .tag.persist{background:rgba(255,215,0,.15);color:var(--yellow)}
+.principle-body .tag.preheat{background:rgba(168,85,247,.15);color:var(--purple)}
+.principle-summary{
+  grid-column:1/-1;
+  background:rgba(0,212,255,.05);border:1px solid var(--cyan);border-radius:12px;
+  padding:16px 24px;text-align:center;font-size:1.15rem;color:var(--text);
+  opacity:0;transition:all .6s ease .6s;
+}
+.principle-summary.show{opacity:1}
+.principle-summary strong{color:var(--cyan)}
+
+/* ============ 背景粒子 ============ */
+.bg-particles{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.particle{position:absolute;border-radius:50%;background:rgba(0,212,255,.3);animation:float-up linear infinite}
+@keyframes float-up{
+  from{transform:translateY(1080px);opacity:0}
+  10%{opacity:.6}
+  90%{opacity:.6}
+  to{transform:translateY(-20px);opacity:0}
+}
+</style>
+</head>
+<body>
+<div class="viewport">
+<div class="slide-stage" id="stage">
+
+<!-- 第1页：开场 -->
+<div class="slide fullscreen-slide active" data-slide="0">
+  <canvas class="fullscreen-canvas" id="introCanvas"></canvas>
+  <div class="fullscreen-content">
+    <div class="intro-title" id="introTitle">关注 Tao 同学</div>
+    <div class="intro-subtitle" id="introSub">上下文管理 · 记忆 · KV Cache：AI 如何记住你</div>
+  </div>
+  <div class="intro-footer" id="introFooter">github.com · knowledge-sharing/ · 开源知识分享</div>
+</div>
+
+<!-- 第2页：三层框架 -->
+<div class="slide" data-slide="1">
+  <div class="slide-content">
+    <div class="section-num">整体框架</div>
+    <div class="section-title">三层关系：策略 · 调度 · 物理</div>
+    <div class="three-layer-stack">
+      <div class="layer-row">
+        <div class="layer-label strategy">
+          <div class="layer-name">记忆 Memory</div>
+          <div class="layer-role">策略层 · 决定召回什么</div>
+        </div>
+        <div class="layer-card">
+          <h3>决定哪些信息进入工作区</h3>
+          <p>短期对话历史 + 长期向量库（RAG召回）</p>
+          <div class="duration">时效：跨会话持久</div>
+        </div>
+      </div>
+      <div class="layer-row">
+        <div class="layer-label dispatch">
+          <div class="layer-name">上下文管理 Context</div>
+          <div class="layer-role">调度层 · 决定拼接什么</div>
+        </div>
+        <div class="layer-card">
+          <h3>决定当前推理时模型实际看到什么</h3>
+          <p>system prompt + 历史 + 当前输入的拼接与裁剪</p>
+          <div class="duration">时效：单次会话</div>
+        </div>
+      </div>
+      <div class="layer-row">
+        <div class="layer-label physical">
+          <div class="layer-name">KV Cache</div>
+          <div class="layer-role">物理层 · 决定能否复用计算</div>
+        </div>
+        <div class="layer-card">
+          <h3>Transformer 自注意力的 K/V 矩阵缓存</h3>
+          <p>避免重复计算已处理 token 的注意力</p>
+          <div class="duration">时效：单次推理，可复用</div>
+        </div>
+      </div>
+    </div>
+    <div class="conclusion-box">记忆决定召回什么 · 上下文决定拼接什么 · KV Cache 决定能否复用计算</div>
+    <div class="page-num">02 / 12</div>
+  </div>
+</div>
+
+<!-- 第3页：记忆详解 -->
+<div class="slide" data-slide="2">
+  <div class="slide-content">
+    <div class="section-num">第一层 · 记忆</div>
+    <div class="section-title">记忆：短期历史 + 长期向量库</div>
+    <div class="memory-layout">
+      <div class="memory-col">
+        <div class="memory-card short">
+          <h3>短期记忆</h3>
+          <div class="meta">Short-term · 存于上下文窗口</div>
+          <p>当前对话历史。存在于上下文窗口内，会话结束即消失。受窗口大小硬约束。</p>
+        </div>
+        <div class="memory-card long">
+          <h3>长期记忆</h3>
+          <div class="meta">Long-term · 向量数据库 + RAG</div>
+          <p>持久化存储。把过去对话、用户偏好、项目状态编码成向量，需要时通过 RAG 召回。</p>
+        </div>
+      </div>
+      <div class="memory-col">
+        <div class="memory-card">
+          <h3 style="color:var(--yellow)">核心挑战：召回精度</h3>
+          <p>召回太多，噪声淹没信号；召回太少，关键信息缺失。</p>
+          <div class="recall-demo">
+            <h4>混合召回策略</h4>
+            <div class="recall-bars">
+              <div class="recall-bar kw">
+                <span style="width:80px">关键词</span>
+                <div class="recall-bar-track"><div class="recall-bar-fill"></div></div>
+                <span>75%</span>
+              </div>
+              <div class="recall-bar vec">
+                <span style="width:80px">向量</span>
+                <div class="recall-bar-track"><div class="recall-bar-fill"></div></div>
+                <span>88%</span>
+              </div>
+              <div class="recall-bar time">
+                <span style="width:80px">时间衰减</span>
+                <div class="recall-bar-track"><div class="recall-bar-fill"></div></div>
+                <span>60%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="conclusion-box">混合召回 = 关键词 + 向量 + 时间衰减，平衡精度与覆盖</div>
+    <div class="page-num">03 / 12</div>
+  </div>
+</div>
+
+<!-- 第4页：上下文管理详解 -->
+<div class="slide" data-slide="3">
+  <div class="slide-content">
+    <div class="section-num">第二层 · 上下文管理</div>
+    <div class="section-title">上下文管理：有限窗口的注意力分配</div>
+    <div class="context-window-demo">
+      <div class="context-block">
+        <div class="context-tag system">System Prompt</div>
+        <div class="context-content">身份与能力定义</div>
+        <div class="context-size">~2K tokens</div>
+      </div>
+      <div class="context-block">
+        <div class="context-tag history">历史对话</div>
+        <div class="context-content">保留最近的对话轮次</div>
+        <div class="context-size">~80K tokens</div>
+      </div>
+      <div class="context-block">
+        <div class="context-tag input">当前输入</div>
+        <div class="context-content">用户本次问题</div>
+        <div class="context-size">~1K tokens</div>
+      </div>
+      <div class="context-block">
+        <div class="context-tag clipped">裁剪掉</div>
+        <div class="context-content">超限时被摘要压缩或丢弃的旧历史</div>
+        <div class="context-size">超限部分</div>
+      </div>
+      <div class="window-meter">
+        <div class="window-meter-label">
+          <span>上下文窗口使用</span>
+          <span>GPT-4: 128K · Claude 3: 200K</span>
+        </div>
+        <div class="window-meter-bar">
+          <div class="window-meter-fill" id="windowFill"></div>
+          <div class="window-meter-mark">85%</div>
+        </div>
+      </div>
+    </div>
+    <div class="conclusion-box">上下文管理 = 注意力分配 · 决定模型每个推理时刻关注什么</div>
+    <div class="page-num">04 / 12</div>
+  </div>
+</div>
+
+<!-- 第5页：KV Cache详解 -->
+<div class="slide" data-slide="4">
+  <div class="slide-content">
+    <div class="section-num">第三层 · KV Cache</div>
+    <div class="section-title">KV Cache：用显存换算力</div>
+    <div class="kvcache-layout">
+      <div class="kvcache-left">
+        <div class="kv-formula">
+          <div class="kv-formula-text">Attention(Q, <strong>K</strong>, <strong>V</strong>)</div>
+          <div class="kv-formula-note">K/V 矩阵缓存后，新 token 只需算自己的 K/V</div>
+        </div>
+        <div class="kv-grid" id="kvGrid">
+          <h4>Token 序列的 K/V 缓存</h4>
+          <div id="kvCells"></div>
+          <div class="kv-legend">
+            <span><div class="kv-legend-dot" style="background:rgba(0,255,136,.6)"></div>已缓存（命中）</span>
+            <span><div class="kv-legend-dot" style="background:rgba(255,215,0,.6)"></div>新 token（需计算）</span>
+          </div>
+        </div>
+      </div>
+      <div class="kvcache-right">
+        <div class="kv-size-card">
+          <h4>物理大小公式</h4>
+          <div class="formula">tokens × layers × heads × dim</div>
+          <div class="example">以 <strong>Llama 70B</strong> 为例：<br>单条对话 KV Cache 可达 <strong>数 GB</strong></div>
+        </div>
+        <div class="kv-size-card">
+          <h4>命中条件</h4>
+          <p style="font-size:1rem;color:var(--text);line-height:1.6">上下文<strong style="color:var(--green)">前缀不变</strong>时，已缓存的 K/V 可复用</p>
+          <p style="font-size:1rem;color:var(--text);line-height:1.6;margin-top:8px">前缀一变，cache <strong style="color:var(--red)">全部失效</strong>，必须重建</p>
+        </div>
+      </div>
+    </div>
+    <div class="conclusion-box">KV Cache = 用显存换算力 · 前缀不变则复用，前缀变则重建</div>
+    <div class="page-num">05 / 12</div>
+  </div>
+</div>
+
+<!-- 第6页：三者关系数据流 -->
+<div class="slide" data-slide="5">
+  <div class="slide-content">
+    <div class="section-num">三者关系</div>
+    <div class="section-title">数据流：记忆 → 上下文 → KV Cache</div>
+    <div class="flow-diagram">
+      <div class="flow-row">
+        <div class="flow-node memory">
+          <h4>记忆系统</h4>
+          <div class="action">recall()</div>
+        </div>
+        <div class="flow-arrow"></div>
+        <div class="flow-result">从长期存储<strong>召回</strong>相关内容（对话历史、用户偏好、项目状态）</div>
+      </div>
+      <div class="flow-row">
+        <div class="flow-node context">
+          <h4>上下文管理</h4>
+          <div class="action">compose()</div>
+        </div>
+        <div class="flow-arrow cyan-green"></div>
+        <div class="flow-result">把召回内容<strong>拼接</strong>到当前窗口（system + history + input）</div>
+      </div>
+      <div class="flow-row">
+        <div class="flow-node kvcache">
+          <h4>KV Cache</h4>
+          <div class="action">cache()</div>
+        </div>
+        <div class="flow-arrow cyan-green"></div>
+        <div class="flow-result">模型推理时<strong>缓存</strong>已处理 token 的 K/V 矩阵，新 token 复用</div>
+      </div>
+    </div>
+    <div class="coupling-points">
+      <div class="coupling-card">
+        <h5>耦合点 1</h5>
+        <p>上下文窗口大小 → 决定 KV Cache 物理大小</p>
+      </div>
+      <div class="coupling-card">
+        <h5>耦合点 2</h5>
+        <p>上下文前缀不变 → KV Cache 可复用；前缀变 → 失效</p>
+      </div>
+      <div class="coupling-card">
+        <h5>耦合点 3</h5>
+        <p>记忆召回质量 → 决定上下文质量 → 决定 KV Cache 有效性</p>
+      </div>
+    </div>
+    <div class="page-num">06 / 12</div>
+  </div>
+</div>
+
+<!-- 第7页：切换用户引入 -->
+<div class="slide" data-slide="6">
+  <div class="slide-content">
+    <div class="section-num">核心问题</div>
+    <div class="section-title">切换用户时，对当前项目有什么影响？</div>
+    <div class="switch-intro">
+      <div class="switch-scene">
+        <div class="user-orb user-a">用户 A</div>
+        <div class="switch-arrow">→</div>
+        <div class="user-orb user-b">用户 B</div>
+      </div>
+      <div class="switch-question">
+        系统正在服务<strong>用户 A</strong>，突然切换到<strong>用户 B</strong><br>
+        影响发生在<strong>三个层次</strong>，逐层分析
+      </div>
+      <div class="switch-layers">
+        <div class="switch-layer-tag l1">① 上下文隔离</div>
+        <div class="switch-layer-tag l2">② KV Cache 失效</div>
+        <div class="switch-layer-tag l3">③ 项目状态重新召回</div>
+      </div>
+    </div>
+    <div class="page-num">07 / 12</div>
+  </div>
+</div>
+
+<!-- 第8页：上下文隔离 -->
+<div class="slide" data-slide="7">
+  <div class="slide-content">
+    <div class="section-num">影响 ① 上下文隔离</div>
+    <div class="section-title">用户 A 的历史不进入用户 B 的窗口</div>
+    <div class="isolation-layout">
+      <div class="isolation-demo">
+        <div class="user-context ua">
+          <div class="user-context-header">● 用户 A 的上下文</div>
+          <div class="context-line">system: 你是A的助手</div>
+          <div class="context-line">A: 帮我改登录页</div>
+          <div class="context-line">AI: 已修改LoginForm.jsx</div>
+          <div class="context-line">A: 再加个记住密码</div>
+        </div>
+        <div class="isolation-wall">隔离墙</div>
+        <div class="user-context ub">
+          <div class="user-context-header">● 用户 B 的上下文</div>
+          <div class="context-line">system: 你是B的助手</div>
+          <div class="context-line">B: 查一下销售数据</div>
+          <div class="context-line">AI: Q3同比增长12%</div>
+          <div class="context-line">B: 按地区拆分</div>
+        </div>
+      </div>
+      <div class="isolation-rule">
+        <strong>安全基线：</strong>切换瞬间必须清空当前上下文，重新构建用户 B 的上下文。出错即数据泄漏。工程上按用户 ID 隔离上下文会话，<strong>物理不共享</strong>。
+      </div>
+    </div>
+    <div class="page-num">08 / 12</div>
+  </div>
+</div>
+
+<!-- 第9页：KV Cache失效 -->
+<div class="slide" data-slide="8">
+  <div class="slide-content">
+    <div class="section-num">影响 ② KV Cache 失效</div>
+    <div class="section-title">前缀不同，缓存全部失效，必须重建</div>
+    <div class="invalidation-layout">
+      <div class="cache-compare">
+        <div class="cache-side valid">
+          <h3>● 同用户续聊</h3>
+          <div class="cache-status">prefix: [sys, A1, AI1, A2, AI2] → append A3</div>
+          <div class="cache-prefix">前缀不变，追加新 token</div>
+          <div class="cache-cells" id="cacheValid"></div>
+          <div class="cache-latency">首 token 延迟：<strong>低（~50ms）</strong> · 命中复用</div>
+        </div>
+        <div class="cache-side invalid">
+          <h3>● 切换到用户 B</h3>
+          <div class="cache-status">prefix: [sysB, B1, AI1] → 全新前缀</div>
+          <div class="cache-prefix">前缀完全不同，全部 miss</div>
+          <div class="cache-cells" id="cacheInvalid"></div>
+          <div class="cache-latency">首 token 延迟：<strong>高（~800ms+）</strong> · 冷启动</div>
+        </div>
+      </div>
+      <div class="cold-start-note">
+        <div class="icon">❄️</div>
+        <div class="text"><strong>冷启动延迟：</strong>切换用户后，第一个 token 的生成时间显著升高，因为模型要重新处理整个上下文前缀。工程优化是按用户 ID 做 prefix cache 分桶，但<strong>跨用户复用基本不可能</strong>。</div>
+      </div>
+    </div>
+    <div class="page-num">09 / 12</div>
+  </div>
+</div>
+
+<!-- 第10页：项目状态影响 -->
+<div class="slide" data-slide="9">
+  <div class="slide-content">
+    <div class="section-num">影响 ③ 项目状态</div>
+    <div class="section-title">项目上下文需从记忆重新召回</div>
+    <div class="project-impact-layout">
+      <div class="scenario-compare">
+        <div class="scenario-card warm">
+          <h3>暖启动 · 用户 B 接触过此项目</h3>
+          <div class="cond">记忆库有用户 B 的项目历史</div>
+          <div class="scenario-flow">
+            <div class="scenario-step"><div class="num">1</div>从用户 B 的记忆库召回项目状态</div>
+            <div class="scenario-step"><div class="num">2</div>填入上下文窗口</div>
+            <div class="scenario-step"><div class="num">3</div>KV Cache 重建并推理</div>
+          </div>
+          <div class="scenario-result">✓ 冷启动，但项目上下文保留</div>
+        </div>
+        <div class="scenario-card cold">
+          <h3>冷启动 · 用户 B 未接触过此项目</h3>
+          <div class="cond">记忆库为空，无历史可召回</div>
+          <div class="scenario-flow">
+            <div class="scenario-step"><div class="num">1</div>记忆库返回空</div>
+            <div class="scenario-step"><div class="num">2</div>仅靠 system prompt + 当前输入</div>
+            <div class="scenario-step"><div class="num">3</div>项目上下文丢失，从零开始</div>
+          </div>
+          <div class="scenario-result">✗ 项目上下文丢失</div>
+        </div>
+      </div>
+      <div class="impact-conclusion">
+        <strong>结论：</strong>多人协作的 AI 系统必须显式管理项目状态——用独立的项目记忆区或结构化状态对象，而非依赖隐式对话历史
+      </div>
+    </div>
+    <div class="page-num">10 / 12</div>
+  </div>
+</div>
+
+<!-- 第11页：设计原则 -->
+<div class="slide" data-slide="10">
+  <div class="slide-content">
+    <div class="section-num">工程设计原则</div>
+    <div class="section-title">切换用户的四条设计原则</div>
+    <div class="principles-grid">
+      <div class="principle-card">
+        <div class="principle-num">1</div>
+        <div class="principle-body">
+          <h3>上下文按用户隔离</h3>
+          <p>物理不共享，按用户 ID 独立会话。防止数据泄漏。</p>
+          <span class="tag isolation">物理隔离</span>
+        </div>
+      </div>
+      <div class="principle-card">
+        <div class="principle-num">2</div>
+        <div class="principle-body">
+          <h3>KV Cache 按用户分桶</h3>
+          <p>同用户内复用，跨用户隔离。prefix cache 按 user_id 分桶。</p>
+          <span class="tag bucket">分桶复用</span>
+        </div>
+      </div>
+      <div class="principle-card">
+        <div class="principle-num">3</div>
+        <div class="principle-body">
+          <h3>项目状态显式持久化</h3>
+          <p>不依赖隐式对话历史。用独立项目记忆区或结构化状态对象。</p>
+          <span class="tag persist">显式持久化</span>
+        </div>
+      </div>
+      <div class="principle-card">
+        <div class="principle-num">4</div>
+        <div class="principle-body">
+          <h3>切换用户主动预热</h3>
+          <p>预加载用户 B 的偏好和最近项目，减少冷启动延迟。</p>
+          <span class="tag preheat">主动预热</span>
+        </div>
+      </div>
+      <div class="principle-summary">
+        做到这四条，切换用户的体验损失<strong>主要就是首 token 延迟</strong>，其他都能掩盖
+      </div>
+    </div>
+    <div class="page-num">11 / 12</div>
+  </div>
+</div>
+
+<!-- 第12页：结尾 -->
+<div class="slide fullscreen-slide" data-slide="11">
+  <canvas class="fullscreen-canvas" id="outroCanvas"></canvas>
+  <div class="fullscreen-content">
+    <div class="outro-title" id="outroTitle">关注 Tao 同学</div>
+    <div class="outro-subtitle" id="outroSub">上下文管理 · 记忆 · KV Cache</div>
+    <div class="outro-subtitle" id="outroSub2" style="margin-top:18px;font-size:1.8rem;color:var(--yellow)">记忆决定召回 · 上下文决定拼接 · Cache 决定复用</div>
+    <div class="outro-subtitle" id="outroSub3" style="margin-top:8px;font-size:1.3rem;color:var(--text-dim)">切换用户：上下文隔离 · Cache 重建 · 状态重召</div>
+  </div>
+  <div class="outro-footer" id="outroFooter">github.com · knowledge-sharing/ · 开源知识分享</div>
+</div>
+
+</div>
+</div>
+
+<script>
+// ========== 缩放适配 ==========
+function fitStage(){
+  const stage=document.getElementById('stage');
+  const sx=window.innerWidth/1920;
+  const sy=window.innerHeight/1080;
+  const s=Math.min(sx,sy);
+  stage.style.transform=`scale(${s})`;
+}
+fitStage();
+window.addEventListener('resize',fitStage);
+
+// ========== 页面切换 ==========
+const slides=document.querySelectorAll('.slide');
+let currentSlide=0;
+window.SLIDE_DURATIONS=[];
+window.AUTO_ADVANCE=false;
+
+function activateSlide(idx){
+  slides.forEach((s,i)=>{
+    if(i===idx){
+      s.classList.add('active');
+      // 触发动画
+      s.querySelectorAll('.info-card,.memory-card,.context-block,.window-meter-fill,.kv-formula,.kv-grid,.kv-size-card,.flow-row,.coupling-card,.switch-scene,.switch-question,.switch-layers,.isolation-demo,.isolation-rule,.cache-side,.cold-start-note,.scenario-card,.impact-conclusion,.principle-card,.principle-summary,.layer-row,.conclusion-box,.intro-title,.intro-subtitle,.intro-footer,.outro-title,.outro-subtitle,.outro-footer,.recall-bar-fill').forEach(el=>{
+        // 延迟触发，让 transition 生效
+        setTimeout(()=>el.classList.add('show'),50);
+      });
+      // KV cells 动画
+      animateKVCells(s);
+    }else{
+      s.classList.remove('active');
+      s.querySelectorAll('.show').forEach(el=>el.classList.remove('show'));
+    }
+  });
+}
+
+function animateKVCells(slide){
+  const kvCells=slide.querySelector('#kvCells');
+  if(kvCells && !kvCells.dataset.built){
+    kvCells.dataset.built='1';
+    let html='';
+    for(let i=0;i<12;i++){
+      const cls=i<10?'cached':'new';
+      html+=`<div style="display:flex;gap:4px;margin-bottom:4px"><span style="font-size:.75rem;color:var(--text-dim);width:40px">t${i+1}</span>`;
+      for(let j=0;j<6;j++){
+        html+=`<div class="kv-cell ${cls}" style="flex:1"></div>`;
+      }
+      html+=`</div>`;
+    }
+    kvCells.innerHTML=html;
+  }
+  const cacheValid=slide.querySelector('#cacheValid');
+  if(cacheValid && !cacheValid.dataset.built){
+    cacheValid.dataset.built='1';
+    let html='';
+    for(let i=0;i<10;i++) html+='<div class="cache-cell hit"></div>';
+    html+='<div class="cache-cell rebuild"></div>';
+    cacheValid.innerHTML=html;
+  }
+  const cacheInvalid=slide.querySelector('#cacheInvalid');
+  if(cacheInvalid && !cacheInvalid.dataset.built){
+    cacheInvalid.dataset.built='1';
+    let html='';
+    for(let i=0;i<12;i++) html+='<div class="cache-cell miss"></div>';
+    cacheInvalid.innerHTML=html;
+  }
+}
+
+window.goToSlide=function(idx){
+  idx=Math.max(0,Math.min(slides.length-1,idx));
+  currentSlide=idx;
+  activateSlide(idx);
+};
+
+window.nextSlide=function(){
+  if(currentSlide<slides.length-1){
+    goToSlide(currentSlide+1);
+  }
+};
+
+// 自动切换
+let autoTimer=null;
+function startAutoAdvance(){
+  if(autoTimer) clearInterval(autoTimer);
+  let idx=0;
+  autoTimer=setInterval(()=>{
+    if(!window.AUTO_ADVANCE) return;
+    if(idx>=window.SLIDE_DURATIONS.length){
+      clearInterval(autoTimer);
+      return;
+    }
+    const dur=window.SLIDE_DURATIONS[idx];
+    setTimeout(()=>{
+      if(window.AUTO_ADVANCE && idx<slides.length-1){
+        goToSlide(idx+1);
+      }
+    },dur);
+    idx++;
+  },100);
+}
+
+// 键盘控制
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' ') nextSlide();
+  if(e.key==='ArrowLeft') goToSlide(currentSlide-1);
+});
+
+// 初始激活第一页
+activateSlide(0);
+
+// ========== 背景粒子 ==========
+function initParticles(canvasId){
+  const canvas=document.getElementById(canvasId);
+  if(!canvas) return;
+  canvas.width=1920;canvas.height=1080;
+  const ctx=canvas.getContext('2d');
+  const particles=[];
+  for(let i=0;i<60;i++){
+    particles.push({
+      x:Math.random()*1920,
+      y:Math.random()*1080,
+      r:Math.random()*2+0.5,
+      vy:-(Math.random()*0.5+0.2),
+      vx:(Math.random()-0.5)*0.2,
+      a:Math.random()*0.5+0.2
+    });
+  }
+  function draw(){
+    ctx.clearRect(0,0,1920,1080);
+    particles.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;
+      if(p.y<0){p.y=1080;p.x=Math.random()*1920}
+      if(p.x<0||p.x>1920) p.vx*=-1;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(0,212,255,${p.a})`;
+      ctx.fill();
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+initParticles('introCanvas');
+initParticles('outroCanvas');
+</script>
+</body>
+</html>
