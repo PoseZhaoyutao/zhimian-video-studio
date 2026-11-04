@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent落地全流程：原子集→图编排→记忆存储</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0e1a; --bg2:#111638; --surface:#161b3d;
+  --cyan:#00d4ff; --purple:#a855f7; --green:#00ff88;
+  --yellow:#ffd700; --red:#ef4444; --orange:#ff8c00;
+  --text:#e2e8f0; --text-dim:#8892b0; --text-bright:#fff;
+  --border:rgba(0,212,255,0.18);
+}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Segoe UI','Microsoft YaHei',system-ui,sans-serif}
+.viewport{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.slide-stage{width:1920px;height:1080px;position:relative;transform-origin:center center;flex-shrink:0}
+.slide{position:absolute;inset:0;width:1920px;height:1080px;opacity:0;visibility:hidden;transition:opacity .5s ease,visibility .5s;overflow:hidden}
+.slide.active{opacity:1;visibility:visible;z-index:2}
+.slide-content{width:100%;height:100%;position:relative;padding:60px 100px;display:flex;flex-direction:column}
+.page-num{position:absolute;bottom:30px;right:50px;font-size:1rem;color:var(--text-dim);font-family:Consolas,monospace;letter-spacing:2px;z-index:10;opacity:.6}
+.section-num{font-size:1.1rem;color:var(--cyan);font-weight:600;letter-spacing:3px;text-transform:uppercase}
+.section-title{font-size:4rem;font-weight:800;color:var(--text-bright);margin:10px 0 16px;line-height:1.15;text-shadow:0 0 30px rgba(0,212,255,.35)}
+.section-title .hl{color:var(--cyan)}
+.section-subtitle{font-size:1.4rem;color:var(--text-dim);max-width:1500px}
+
+/* 激活触发的入场动画 */
+.slide .anim{opacity:0}
+.slide.active .anim{animation:fadeUp .7s cubic-bezier(.34,1.56,.64,1) forwards}
+.slide.active .anim.d1{animation-delay:.15s}
+.slide.active .anim.d2{animation-delay:.35s}
+.slide.active .anim.d3{animation-delay:.55s}
+.slide.active .anim.d4{animation-delay:.75s}
+.slide.active .anim.d5{animation-delay:.95s}
+.slide.active .anim.d6{animation-delay:1.15s}
+@keyframes fadeUp{from{opacity:0;transform:translateY(34px)}to{opacity:1;transform:translateY(0)}}
+@keyframes scaleIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+.slide.active .anim-pop{opacity:0;animation:scaleIn .7s cubic-bezier(.34,1.56,.64,1) forwards}
+.slide.active .anim-pop.d1{animation-delay:.2s}
+.slide.active .anim-pop.d2{animation-delay:.45s}
+.slide.active .anim-pop.d3{animation-delay:.7s}
+.slide.active .anim-pop.d4{animation-delay:.95s}
+
+/* 持续动画 */
+@keyframes titleGlow{0%,100%{text-shadow:0 0 30px rgba(0,212,255,.35)}50%{text-shadow:0 0 55px rgba(0,212,255,.75)}}
+.slide.active .section-title{animation:fadeUp .7s cubic-bezier(.34,1.56,.64,1) .15s forwards, titleGlow 3s ease-in-out 1.2s infinite}
+@keyframes cardGlow{0%,100%{box-shadow:0 0 0 rgba(0,212,255,0)}50%{box-shadow:0 0 26px rgba(0,212,255,.28)}}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.85}}
+@keyframes flowDash{to{stroke-dashoffset:-40}}
+@keyframes floatY{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+@keyframes spinSlow{to{transform:rotate(360deg)}}
+
+/* 开场/结尾 */
+.fullscreen-slide .slide-content{padding:0;align-items:center;justify-content:center;text-align:center}
+.fullscreen-canvas{position:absolute;inset:0;width:1920px;height:1080px;z-index:0}
+.fullscreen-content{position:relative;z-index:2;text-align:center;top:50%;transform:translateY(-55%)}
+.intro-title,.outro-title{
+  font-size:5.6rem;font-weight:900;line-height:1.2;
+  background:linear-gradient(135deg,#00d4ff 0%,#a855f7 50%,#00ff88 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  opacity:0;transform:translateY(40px) scale(.9);
+}
+.slide.active .intro-title,.slide.active .outro-title{animation:titleIn 1s cubic-bezier(.34,1.56,.64,1) forwards}
+@keyframes titleIn{to{opacity:1;transform:translateY(0) scale(1)}}
+.intro-subtitle,.outro-subtitle{font-size:2rem;color:var(--text-dim);margin-top:26px;opacity:0}
+.slide.active .intro-subtitle{animation:fadeUp .8s ease .5s forwards}
+.slide.active .outro-subtitle{animation:fadeUp .8s ease .4s forwards}
+.pipeline-pill{
+  display:inline-flex;align-items:center;gap:18px;margin-top:44px;padding:16px 40px;
+  border:1px solid var(--border);border-radius:60px;background:rgba(22,27,61,.55);
+  font-size:1.5rem;font-weight:700;color:var(--text-bright);opacity:0;
+  backdrop-filter:blur(8px);
+}
+.slide.active .pipeline-pill{animation:fadeUp .8s ease .8s forwards}
+.pipeline-pill .pp{color:var(--cyan)}
+.pipeline-pill .sep{color:var(--purple);font-size:1.8rem}
+.slide.active #introFollow{animation:followIn .8s ease 1.15s forwards}
+.slide.active #outroFollow{animation:followIn .8s ease 1.1s forwards}
+@keyframes followIn{to{opacity:1;text-shadow:0 0 30px rgba(0,255,136,.6)}}
+.outro-github{
+  margin-top:36px;display:inline-block;padding:14px 34px;border:1px solid var(--green);
+  border-radius:12px;background:rgba(0,255,136,.06);color:var(--green);
+  font-family:Consolas,monospace;font-size:1.15rem;opacity:0;
+}
+.slide.active .outro-github{animation:fadeUp .8s ease .9s forwards}
+.outro-next{
+  margin-top:22px;font-size:1.25rem;color:var(--yellow);opacity:0;letter-spacing:2px;
+}
+.slide.active .outro-next{animation:fadeUp .8s ease 1.15s forwards}
+
+/* 通用卡片 */
+.info-card{
+  background:linear-gradient(135deg,rgba(22,27,61,.75),rgba(17,22,56,.5));
+  border:1px solid var(--border);border-radius:16px;padding:26px 30px;
+  backdrop-filter:blur(10px);
+}
+.info-card h3{font-size:1.5rem;color:var(--text-bright);margin-bottom:10px}
+.info-card p{font-size:1.1rem;color:var(--text);line-height:1.7}
+.info-card .ic{font-size:2.2rem;margin-bottom:12px;display:block}
+
+/* 结论框 */
+.conclusion-box{
+  font-size:1.55rem;font-weight:700;color:var(--cyan);text-align:center;
+  padding:18px 36px;border:2px solid var(--cyan);border-radius:14px;
+  background:rgba(0,212,255,.05);margin:22px auto 0;max-width:1500px;
+}
+.slide.active .conclusion-box{opacity:0;animation:scaleIn .7s cubic-bezier(.34,1.56,.64,1) .9s forwards}
+
+/* ============ 第2页：应用总览 ============ */
+.domain-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;margin:26px 0;flex:1}
+.domain-card{
+  background:linear-gradient(135deg,rgba(22,27,61,.75),rgba(17,22,56,.5));
+  border:1px solid var(--border);border-radius:18px;padding:28px 32px;position:relative;overflow:hidden;
+}
+.domain-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--dc,#00d4ff),transparent);
+}
+.domain-card .dc-head{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.domain-card .dc-icon{font-size:2.4rem}
+.domain-card h3{font-size:1.65rem;color:var(--text-bright)}
+.domain-card p{font-size:1.08rem;color:var(--text);line-height:1.75}
+.domain-card .dc-tag{
+  display:inline-block;margin-top:12px;padding:5px 14px;border-radius:20px;
+  font-size:.9rem;font-family:Consolas,monospace;
+  border:1px solid var(--dc,#00d4ff);color:var(--dc,#00d4ff);background:rgba(255,255,255,.03);
+}
+.agent-formula{
+  display:flex;align-items:center;justify-content:center;gap:20px;
+  padding:18px;border-radius:14px;border:1px dashed var(--purple);
+  background:rgba(168,85,247,.06);font-size:1.4rem;font-weight:700;
+}
+.agent-formula .f{color:var(--text-bright)}
+.agent-formula .op{color:var(--purple);font-size:1.7rem}
+.agent-formula .f.c1{color:var(--cyan)}.agent-formula .f.c2{color:var(--green)}.agent-formula .f.c3{color:var(--yellow)}
+
+/* ============ 第3页：办公试金石 ============ */
+.reason-stack{display:flex;flex-direction:column;gap:24px;margin:30px 0;flex:1;justify-content:center}
+.reason-row{display:flex;align-items:stretch;gap:26px}
+.reason-num{
+  width:110px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  font-size:3.6rem;font-weight:900;font-family:Consolas,monospace;
+  background:linear-gradient(135deg,var(--cyan),var(--purple));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.reason-body{
+  flex:1;background:linear-gradient(135deg,rgba(22,27,61,.75),rgba(17,22,56,.5));
+  border:1px solid var(--border);border-radius:16px;padding:24px 32px;
+}
+.reason-body h3{font-size:1.6rem;color:var(--text-bright);margin-bottom:8px}
+.reason-body p{font-size:1.15rem;color:var(--text);line-height:1.75}
+
+/* ============ 第4页：方法论三阶段 ============ */
+.stage-flow{display:flex;align-items:stretch;gap:0;margin:34px 0;flex:1;align-items:center}
+.stage-card{
+  flex:1;background:linear-gradient(135deg,rgba(22,27,61,.8),rgba(17,22,56,.55));
+  border:1px solid var(--sc);border-radius:20px;padding:34px 30px;position:relative;
+}
+.stage-card .stage-badge{
+  display:inline-block;padding:6px 18px;border-radius:20px;font-size:1rem;font-weight:700;
+  background:var(--sc);color:#0a0e1a;margin-bottom:16px;font-family:Consolas,monospace;
+}
+.stage-card h3{font-size:2rem;color:var(--text-bright);margin-bottom:12px}
+.stage-card p{font-size:1.12rem;color:var(--text);line-height:1.75}
+.stage-card .stage-role{margin-top:16px;font-size:1.02rem;color:var(--sc);font-weight:700}
+.stage-arrow{
+  width:80px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  font-size:3rem;color:var(--purple);animation:pulse 2s ease-in-out infinite;
+}
+
+/* ============ 第5页：原子集 ============ */
+.atomic-layout{display:flex;gap:34px;margin:24px 0;flex:1}
+.atomic-left{flex:1.25;display:flex;flex-direction:column;gap:12px;justify-content:center}
+.atomic-chip{
+  display:flex;align-items:center;gap:16px;padding:15px 22px;border-radius:12px;
+  background:rgba(22,27,61,.7);border:1px solid var(--border);
+}
+.atomic-chip .ac-icon{font-size:1.7rem}
+.atomic-chip .ac-name{font-size:1.25rem;font-weight:700;color:var(--text-bright);width:200px}
+.atomic-chip .ac-desc{font-size:1rem;color:var(--text-dim)}
+.atomic-right{flex:1;display:flex;flex-direction:column;gap:16px;justify-content:center}
+.req-card{
+  background:rgba(0,212,255,.05);border:1px solid var(--cyan);border-radius:14px;padding:20px 24px;
+}
+.req-card h4{font-size:1.25rem;color:var(--cyan);margin-bottom:8px}
+.req-card p{font-size:1.05rem;color:var(--text);line-height:1.65}
+.principle-quote{
+  margin-top:8px;text-align:center;font-size:1.5rem;font-weight:800;color:var(--yellow);
+  text-shadow:0 0 24px rgba(255,215,0,.4);
+}
+
+/* ============ 第6页：设计四原则 ============ */
+.principle-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin:26px 0;flex:1}
+.principle-card{
+  background:linear-gradient(135deg,rgba(22,27,61,.75),rgba(17,22,56,.5));
+  border:1px solid var(--border);border-radius:18px;padding:28px 32px;position:relative;
+}
+.principle-card .pc-num{
+  position:absolute;top:20px;right:26px;font-size:3.2rem;font-weight:900;
+  font-family:Consolas,monospace;opacity:.14;color:var(--cyan);
+}
+.principle-card h3{font-size:1.6rem;color:var(--text-bright);margin-bottom:10px}
+.principle-card h3 .pc-key{color:var(--cyan)}
+.principle-card p{font-size:1.1rem;color:var(--text);line-height:1.75}
+.principle-card .pc-case{
+  margin-top:12px;padding:10px 16px;border-radius:10px;background:rgba(0,255,136,.06);
+  border:1px dashed rgba(0,255,136,.4);font-size:.98rem;color:var(--green);
+}
+
+/* ============ 第7页：DAG图编排 ============ */
+.dag-layout{display:flex;gap:40px;margin:20px 0;flex:1;align-items:center}
+.dag-canvas{flex:1.3;height:560px;position:relative;background:rgba(0,0,0,.25);border:1px solid var(--border);border-radius:18px}
+.dag-node{
+  position:absolute;width:190px;padding:14px 16px;border-radius:14px;text-align:center;
+  background:linear-gradient(135deg,rgba(22,27,61,.95),rgba(17,22,56,.9));
+  border:2px solid var(--nc,#00d4ff);font-weight:700;
+  box-shadow:0 0 18px rgba(0,212,255,.12);
+}
+.dag-node .dn-icon{font-size:1.6rem;display:block;margin-bottom:4px}
+.dag-node .dn-name{font-size:1.12rem;color:var(--text-bright)}
+.dag-node .dn-sub{font-size:.82rem;color:var(--text-dim);font-family:Consolas,monospace;margin-top:3px}
+.dag-node.parallel{animation:cardGlow 2.4s ease-in-out infinite}
+.dag-node.start{border-color:var(--purple);box-shadow:0 0 22px rgba(168,85,247,.3)}
+.dag-node.end{border-color:var(--green);box-shadow:0 0 22px rgba(0,255,136,.3)}
+.dag-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.dag-svg .edge{stroke:rgba(0,212,255,.5);stroke-width:2.5;fill:none;stroke-dasharray:8 6;animation:flowDash 1.2s linear infinite}
+.dag-right{flex:1;display:flex;flex-direction:column;gap:16px}
+.dag-point{
+  background:rgba(22,27,61,.7);border:1px solid var(--border);border-radius:14px;padding:20px 24px;
+}
+.dag-point h4{font-size:1.3rem;color:var(--cyan);margin-bottom:8px}
+.dag-point p{font-size:1.05rem;color:var(--text);line-height:1.7}
+.speed-compare{display:flex;gap:14px;margin-top:6px}
+.speed-bar-wrap{flex:1}
+.speed-label{font-size:.9rem;color:var(--text-dim);margin-bottom:5px;display:flex;justify-content:space-between}
+.speed-track{height:14px;background:rgba(255,255,255,.05);border-radius:7px;overflow:hidden}
+.speed-fill{height:100%;border-radius:7px;width:0;transition:width 1.2s ease .8s}
+.speed-fill.serial{background:linear-gradient(90deg,var(--red),var(--orange))}
+.speed-fill.par{background:linear-gradient(90deg,var(--green),var(--cyan))}
+.slide.active .speed-fill.serial{width:100%}
+.slide.active .speed-fill.par{width:34%}
+
+/* ============ 第8页：进阶编排 ============ */
+.adv-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin:26px 0;flex:1}
+.adv-card{
+  background:linear-gradient(135deg,rgba(22,27,61,.75),rgba(17,22,56,.5));
+  border:1px solid var(--border);border-radius:18px;padding:28px;display:flex;flex-direction:column;
+}
+.adv-card .adv-icon{font-size:2.6rem;margin-bottom:14px}
+.adv-card h3{font-size:1.55rem;color:var(--text-bright);margin-bottom:12px}
+.adv-card .adv-diagram{margin:6px 0 16px;height:120px;display:flex;align-items:center;justify-content:center}
+.adv-card p{font-size:1.05rem;color:var(--text);line-height:1.7}
+.adv-card .adv-case{
+  margin-top:auto;padding:10px 14px;border-radius:10px;background:rgba(168,85,247,.07);
+  border:1px dashed rgba(168,85,247,.45);font-size:.95rem;color:var(--purple);
+}
+.mini-flow{display:flex;align-items:center;gap:8px}
+.mini-node{padding:8px 14px;border-radius:8px;font-size:.9rem;font-weight:700;border:1.5px solid var(--mc,#00d4ff);color:var(--text-bright);background:rgba(0,0,0,.25)}
+.mini-arrow{color:var(--mc,#00d4ff);font-size:1.2rem;font-weight:900}
+.mini-node.branch{border-color:var(--yellow);color:var(--yellow)}
+.mini-node.loop{border-color:var(--orange);color:var(--orange);animation:pulse 1.6s ease-in-out infinite}
+.mini-node.route{border-color:var(--purple);color:var(--purple)}
+.mini-arrow.dash{opacity:.7}
+
+/* ============ 第9页：记忆存储 ============ */
+.memory-layout{display:flex;gap:30px;margin:24px 0;flex:1}
+.memory-col{flex:1;display:flex;flex-direction:column;gap:16px}
+.memory-card{
+  background:rgba(22,27,61,.65);border:1px solid var(--border);border-radius:16px;padding:24px;
+}
+.memory-card.short{border-left:4px solid var(--cyan)}
+.memory-card.long{border-left:4px solid var(--purple)}
+.memory-card h3{font-size:1.55rem;color:var(--text-bright);margin-bottom:10px}
+.memory-card .meta{font-size:.9rem;color:var(--text-dim);font-family:Consolas,monospace;margin-bottom:10px}
+.memory-card p{font-size:1.05rem;color:var(--text);line-height:1.7}
+.mem-type-row{display:flex;gap:12px;margin-top:14px}
+.mem-type{
+  flex:1;padding:12px 14px;border-radius:10px;text-align:center;
+  background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.4);
+}
+.mem-type .mt-icon{font-size:1.6rem;display:block;margin-bottom:6px}
+.mem-type .mt-name{font-size:1rem;font-weight:700;color:var(--text-bright)}
+.mem-type .mt-desc{font-size:.85rem;color:var(--text-dim);margin-top:4px}
+.recall-filter{
+  background:rgba(0,0,0,.3);border:1px dashed var(--green);border-radius:12px;padding:16px 20px;
+}
+.recall-filter h4{font-size:1.1rem;color:var(--green);margin-bottom:10px}
+.filter-chips{display:flex;gap:12px}
+.filter-chip{
+  flex:1;padding:10px;border-radius:8px;text-align:center;font-size:.95rem;font-weight:700;
+  background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.4);color:var(--green);
+  animation:cardGlow 2.5s ease-in-out infinite;
+}
+
+/* ============ 第10页：完整案例 ============ */
+.timeline{display:flex;flex-direction:column;gap:0;margin:20px 0;flex:1;justify-content:center;position:relative}
+.timeline::before{
+  content:'';position:absolute;left:34px;top:20px;bottom:20px;width:3px;
+  background:linear-gradient(180deg,var(--cyan),var(--purple),var(--green));
+  border-radius:2px;opacity:.5;
+}
+.tl-row{display:flex;align-items:center;gap:24px;padding:9px 0;position:relative}
+.tl-dot{
+  width:44px;height:44px;border-radius:50%;flex-shrink:0;z-index:2;
+  display:flex;align-items:center;justify-content:center;font-size:1.2rem;
+  background:var(--bg2);border:2.5px solid var(--tc,#00d4ff);
+  box-shadow:0 0 16px rgba(0,212,255,.25);animation:pulse 2.4s ease-in-out infinite;
+}
+.tl-body{
+  flex:1;background:rgba(22,27,61,.72);border:1px solid var(--border);border-radius:12px;
+  padding:12px 22px;display:flex;align-items:center;gap:18px;
+}
+.tl-step{font-size:1.02rem;font-weight:800;color:var(--tc,#00d4ff);width:170px;flex-shrink:0}
+.tl-text{font-size:1.02rem;color:var(--text);line-height:1.5}
+.tl-text .tl-hl{color:var(--yellow);font-weight:700}
+.tl-text .tl-hl-g{color:var(--green);font-weight:700}
+
+/* ============ 第11页：领域矩阵 ============ */
+.matrix-table{width:100%;border-collapse:separate;border-spacing:0;margin:24px 0;flex:1}
+.matrix-table th{
+  font-size:1.3rem;color:var(--text-bright);padding:18px 20px;text-align:left;
+  background:rgba(0,212,255,.1);border-bottom:2px solid var(--cyan);
+}
+.matrix-table th:first-child{border-radius:12px 0 0 0;color:var(--cyan)}
+.matrix-table th:last-child{border-radius:0 12px 0 0}
+.matrix-table td{
+  font-size:1.12rem;color:var(--text);padding:20px;line-height:1.6;
+  border-bottom:1px solid rgba(0,212,255,.12);background:rgba(22,27,61,.4);
+}
+.matrix-table td:first-child{font-weight:800;color:var(--text-bright);font-size:1.25rem;white-space:nowrap}
+.matrix-table .cell-hl{color:var(--cyan)}
+.matrix-table .cell-hl2{color:var(--green)}
+.matrix-table .cell-hl3{color:var(--purple)}
+.balance-note{
+  display:flex;align-items:center;gap:24px;justify-content:center;
+  padding:16px 30px;border-radius:14px;border:2px solid var(--yellow);
+  background:rgba(255,215,0,.05);font-size:1.35rem;font-weight:700;color:var(--text-bright);
+}
+.balance-note .bn-hl{color:var(--yellow)}
+.balance-slider{display:flex;align-items:center;gap:10px;font-size:1.1rem;font-family:Consolas,monospace}
+.bs-end{color:var(--cyan)}.bs-end2{color:var(--purple)}
+.bs-track{width:180px;height:10px;border-radius:5px;background:linear-gradient(90deg,var(--cyan),var(--purple));position:relative}
+.bs-knob{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:50%;background:var(--yellow);box-shadow:0 0 14px rgba(255,215,0,.6);animation:pulse 2s ease-in-out infinite}
+
+/* 粒子动画 */
+@keyframes particleFloat{
+  0%{transform:translateY(0) translateX(0);opacity:0}
+  10%{opacity:.8}
+  90%{opacity:.6}
+  100%{transform:translateY(-120px) translateX(30px);opacity:0}
+}
+.particle{position:absolute;border-radius:50%;animation:particleFloat linear infinite}
+</style>
+</head>
+<body>
+<div class="viewport">
+<div class="slide-stage" id="stage">
+
+<!-- ========== 第1页：开场 ========== -->
+<section class="slide fullscreen-slide active" data-index="0">
+  <canvas class="fullscreen-canvas" id="introCanvas"></canvas>
+  <div class="fullscreen-content">
+    <div class="intro-title" id="introTitle">Agent落地全流程</div>
+    <div class="intro-subtitle">从构建原子集 到 图编排 到 记忆存储 · 特别实战：办公软件自动周报</div>
+    <div class="pipeline-pill">
+      <span class="pp">🧩 原子集</span><span class="sep">→</span>
+      <span class="pp">🕸️ 图编排</span><span class="sep">→</span>
+      <span class="pp">🧠 记忆存储</span>
+    </div>
+    <div style="margin-top:46px;font-size:1.6rem;color:#00ff88;font-weight:800;letter-spacing:4px;opacity:0" id="introFollow">关注 Tao 同学</div>
+  </div>
+  <div class="page-num">01 / 12</div>
+</section>
+
+<!-- ========== 第2页：各领域应用总览 ========== -->
+<section class="slide" data-index="1">
+  <div class="slide-content">
+    <div class="section-num anim">APPLICATION LANDSCAPE</div>
+    <div class="section-title anim d1">Agent已经渗透到<span class="hl">哪些领域</span></div>
+    <div class="domain-grid">
+      <div class="domain-card anim d1" style="--dc:#00d4ff">
+        <div class="dc-head"><span class="dc-icon">💻</span><h3>编程开发</h3></div>
+        <p>Copilot类工具自主读代码、改代码、跑测试、修Bug，从补全助手进化为能独立完成任务的编码智能体</p>
+        <span class="dc-tag">code agent · SWE-bench</span>
+      </div>
+      <div class="domain-card anim d2" style="--dc:#00ff88">
+        <div class="dc-head"><span class="dc-icon">🎧</span><h3>智能客服</h3></div>
+        <p>查订单、办退换、升级人工，意图识别加工具调用，处理70%以上的重复性咨询</p>
+        <span class="dc-tag">intent → tool → resolve</span>
+      </div>
+      <div class="domain-card anim d3" style="--dc:#a855f7">
+        <div class="dc-head"><span class="dc-icon">📊</span><h3>数据分析</h3></div>
+        <p>自动写SQL、生成图表、输出结论，假设-验证-修正的闭环让分析不再依赖人工排队</p>
+        <span class="dc-tag">NL2SQL · auto-chart</span>
+      </div>
+      <div class="domain-card anim d4" style="--dc:#ffd700">
+        <div class="dc-head"><span class="dc-icon">🏢</span><h3>办公自动化</h3></div>
+        <p>在邮件、日历、文档之间穿梭，自动完成跨应用流程：周报、纪要、行程、审批</p>
+        <span class="dc-tag">mail · calendar · docs</span>
+      </div>
+    </div>
+    <div class="agent-formula anim d5">
+      <span class="f c1">会调工具的大模型</span><span class="op">+</span>
+      <span class="f c2">任务图编排</span><span class="op">+</span>
+      <span class="f c3">可持续记忆</span>
+      <span class="op">=</span><span class="f">所有Agent的底层结构</span>
+    </div>
+  </div>
+  <div class="page-num">02 / 12</div>
+</section>
+
+<!-- ========== 第3页：为什么选办公软件 ========== -->
+<section class="slide" data-index="2">
+  <div class="slide-content">
+    <div class="section-num anim">CASE STUDY</div>
+    <div class="section-title anim d1">为什么用<span class="hl">办公软件</span>做试金石</div>
+    <div class="reason-stack">
+      <div class="reason-row anim d1">
+        <div class="reason-num">1</div>
+        <div class="reason-body">
+          <h3>任务琐碎且高频</h3>
+          <p>日报周报、会议纪要、行程安排，每天都在发生。高频意味着反馈快，一周就能验证Agent设计是否成立</p>
+        </div>
+      </div>
+      <div class="reason-row anim d2">
+        <div class="reason-num">2</div>
+        <div class="reason-body">
+          <h3>天然跨应用</h3>
+          <p>一封邮件可能关联日历、文档、审批流。单点工具解决不了，必须靠编排把多个原子串起来</p>
+        </div>
+      </div>
+      <div class="reason-row anim d3">
+        <div class="reason-num">3</div>
+        <div class="reason-body">
+          <h3>容错空间小</h3>
+          <p>发错的邮件撤不回来。这逼着你把确认机制、重试逻辑、错误处理做扎实——和生产级要求完全一致</p>
+        </div>
+      </div>
+    </div>
+    <div class="conclusion-box anim d4">后面全程以「自动生成周报」为例，走完原子集 → 图编排 → 记忆存储每一步</div>
+  </div>
+  <div class="page-num">03 / 12</div>
+</section>
+
+<!-- ========== 第4页：方法论三阶段 ========== -->
+<section class="slide" data-index="3">
+  <div class="slide-content">
+    <div class="section-num anim">METHODOLOGY</div>
+    <div class="section-title anim d1">构建生产级Agent的<span class="hl">三个阶段</span></div>
+    <div class="stage-flow">
+      <div class="stage-card anim-pop d1" style="--sc:#00d4ff">
+        <span class="stage-badge">STAGE 1</span>
+        <h3>🧩 构建原子集</h3>
+        <p>把业务能力拆成最小可执行单元：每个单元只做一件事，输入输出明确，可独立测试、独立替换</p>
+        <div class="stage-role">→ 决定能力边界</div>
+      </div>
+      <div class="stage-arrow anim d2">➜</div>
+      <div class="stage-card anim-pop d2" style="--sc:#a855f7">
+        <span class="stage-badge">STAGE 2</span>
+        <h3>🕸️ 图编排</h3>
+        <p>把原子单元组织成有向图：定义谁先谁后、哪里并行、哪里分支、哪里循环</p>
+        <div class="stage-role">→ 决定执行质量</div>
+      </div>
+      <div class="stage-arrow anim d3">➜</div>
+      <div class="stage-card anim-pop d3" style="--sc:#00ff88">
+        <span class="stage-badge">STAGE 3</span>
+        <h3>🧠 记忆存储</h3>
+        <p>让Agent跨会话记住用户偏好、任务状态和历史决策，越用越懂你</p>
+        <div class="stage-role">→ 决定个性化程度</div>
+      </div>
+    </div>
+    <div class="conclusion-box anim d4">三层缺一不可：没有原子集做不了事，没有图编排做不稳，没有记忆做不深</div>
+  </div>
+  <div class="page-num">04 / 12</div>
+</section>
+
+<!-- ========== 第5页：阶段一 构建原子集 ========== -->
+<section class="slide" data-index="4">
+  <div class="slide-content">
+    <div class="section-num anim">STAGE 1 · ATOMIC SET</div>
+    <div class="section-title anim d1">阶段一：构建<span class="hl">原子集</span></div>
+    <div class="section-subtitle anim d1">什么叫原子？不可再分的最小可执行单元 —— 以周报Agent为例</div>
+    <div class="atomic-layout">
+      <div class="atomic-left">
+        <div class="atomic-chip anim d1"><span class="ac-icon">📧</span><span class="ac-name">读邮件</span><span class="ac-desc">拉取本周收件，提取关键事项</span></div>
+        <div class="atomic-chip anim d2"><span class="ac-icon">📅</span><span class="ac-name">读日历</span><span class="ac-desc">查询本周会议列表与详情</span></div>
+        <div class="atomic-chip anim d3"><span class="ac-icon">📄</span><span class="ac-name">读文档</span><span class="ac-desc">读取本周修改过的文档</span></div>
+        <div class="atomic-chip anim d4"><span class="ac-icon">🔗</span><span class="ac-name">汇总要点</span><span class="ac-desc">三路数据合并为事件列表</span></div>
+        <div class="atomic-chip anim d5"><span class="ac-icon">✍️</span><span class="ac-name">起草周报</span><span class="ac-desc">按模板生成周报草稿</span></div>
+        <div class="atomic-chip anim d6"><span class="ac-icon">📤</span><span class="ac-name">发送邮件</span><span class="ac-desc">非幂等操作，需确认机制</span></div>
+      </div>
+      <div class="atomic-right">
+        <div class="req-card anim d2">
+          <h4>① 接口明确</h4>
+          <p>输入输出是清晰的接口定义，注册为标准工具描述，让模型知道何时调用</p>
+        </div>
+        <div class="req-card anim d3">
+          <h4>② 独立测试</h4>
+          <p>每个原子单独跑通单测，不依赖整个Agent链路</p>
+        </div>
+        <div class="req-card anim d4">
+          <h4>③ 独立替换</h4>
+          <p>换邮件服务商只换一个原子，编排逻辑不动</p>
+        </div>
+        <div class="principle-quote anim d5">宁做十个简单原子，不做万能大函数</div>
+      </div>
+    </div>
+  </div>
+  <div class="page-num">05 / 12</div>
+</section>
+
+<!-- ========== 第6页：原子集设计四原则 ========== -->
+<section class="slide" data-index="5">
+  <div class="slide-content">
+    <div class="section-num anim">STAGE 1 · PRINCIPLES</div>
+    <div class="section-title anim d1">原子集设计<span class="hl">四原则</span></div>
+    <div class="principle-grid">
+      <div class="principle-card anim d1">
+        <div class="pc-num">01</div>
+        <h3><span class="pc-key">单一职责</span></h3>
+        <p>读邮件的原子不要顺手解析附件，解析附件是另一个原子。职责越纯，复用越广</p>
+        <div class="pc-case">📌 周报例：读日历拆成「查空闲时间」+「查会议详情」两个原子</div>
+      </div>
+      <div class="principle-card anim d2">
+        <div class="pc-num">02</div>
+        <h3><span class="pc-key">幂等性</span></h3>
+        <p>同样的输入执行两次，结果一样。非幂等操作（发送、支付、删除）必须加确认机制</p>
+        <div class="pc-case">📌 周报例：发送邮件前强制人工确认，防止重复发送</div>
+      </div>
+      <div class="principle-card anim d3">
+        <div class="pc-num">03</div>
+        <h3><span class="pc-key">错误结构化</span></h3>
+        <p>原子失败时返回明确错误码，而不是抛异常让编排层去猜。错误码是图路由的依据</p>
+        <div class="pc-case">📌 周报例：日历接口超时返回 TIMEOUT，触发重试分支</div>
+      </div>
+      <div class="principle-card anim d4">
+        <div class="pc-num">04</div>
+        <h3><span class="pc-key">粒度适中</span></h3>
+        <p>太粗复用性差，太细编排成本爆炸。经验法则：一个原子的功能能用一句话讲清楚</p>
+        <div class="pc-case">📌 判断标准：一句话说不清，说明它做了两件事</div>
+      </div>
+    </div>
+  </div>
+  <div class="page-num">06 / 12</div>
+</section>
+
+<!-- ========== 第7页：阶段二 图编排 DAG ========== -->
+<section class="slide" data-index="6">
+  <div class="slide-content">
+    <div class="section-num anim">STAGE 2 · GRAPH ORCHESTRATION</div>
+    <div class="section-title anim d1">阶段二：<span class="hl">图编排</span> —— 从积木到建筑</div>
+    <div class="dag-layout">
+      <div class="dag-canvas anim d1">
+        <svg class="dag-svg" viewBox="0 0 900 560">
+          <defs>
+            <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="rgba(0,212,255,.7)"/>
+            </marker>
+          </defs>
+          <path class="edge" d="M 200 280 C 280 280, 300 130, 380 130" marker-end="url(#arrowhead)"/>
+          <path class="edge" d="M 200 280 C 280 280, 300 280, 380 280" marker-end="url(#arrowhead)"/>
+          <path class="edge" d="M 200 280 C 280 280, 300 430, 380 430" marker-end="url(#arrowhead)"/>
+          <path class="edge" d="M 570 130 C 650 130, 660 280, 720 280" marker-end="url(#arrowhead)"/>
+          <path class="edge" d="M 570 280 L 700 280" marker-end="url(#arrowhead)"/>
+          <path class="edge" d="M 570 430 C 650 430, 660 280, 720 280" marker-end="url(#arrowhead)"/>
+          <path class="edge" d="M 850 280 C 880 280, 880 280, 885 280" marker-end="url(#arrowhead)" opacity="0"/>
+        </svg>
+        <div class="dag-node start" style="left:40px;top:240px"><span class="dn-icon">🎯</span><span class="dn-name">周五 17:00</span><span class="dn-sub">调度器触发</span></div>
+        <div class="dag-node parallel" style="left:380px;top:85px;--nc:#00d4ff"><span class="dn-icon">📧</span><span class="dn-name">读邮件</span><span class="dn-sub">原子A · 并行</span></div>
+        <div class="dag-node parallel" style="left:380px;top:240px;--nc:#a855f7"><span class="dn-icon">📅</span><span class="dn-name">读日历</span><span class="dn-sub">原子B · 并行</span></div>
+        <div class="dag-node parallel" style="left:380px;top:395px;--nc:#ffd700"><span class="dn-icon">📄</span><span class="dn-name">读文档</span><span class="dn-sub">原子C · 并行</span></div>
+        <div class="dag-node" style="left:720px;top:240px;--nc:#ff8c00"><span class="dn-icon">🔗</span><span class="dn-name">汇总要点</span><span class="dn-sub">汇合点</span></div>
+        <div class="dag-node end" style="left:720px;top:430px;--nc:#00ff88"><span class="dn-icon">✍️</span><span class="dn-name">起草周报</span><span class="dn-sub">→ 发送</span></div>
+      </div>
+      <div class="dag-right">
+        <div class="dag-point anim d2">
+          <h4>DAG：有向无环图</h4>
+          <p>节点是原子，边是执行顺序。控制流从Prompt抽出来，变成显式的、可审计的、可测试的代码结构</p>
+        </div>
+        <div class="dag-point anim d3">
+          <h4>并行的价值</h4>
+          <div class="speed-compare">
+            <div class="speed-bar-wrap">
+              <div class="speed-label"><span>串行 3×2s</span><span>6s</span></div>
+              <div class="speed-track"><div class="speed-fill serial"></div></div>
+            </div>
+            <div class="speed-bar-wrap">
+              <div class="speed-label"><span>并行 max(2s)</span><span>2s</span></div>
+              <div class="speed-track"><div class="speed-fill par"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="dag-point anim d4">
+          <h4>工程意义</h4>
+          <p>三个数据源各花两秒：串行六秒，并行只要两秒。编排图一旦建立，性能优化只改图，不改Prompt</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-num">07 / 12</div>
+</section>
+
+<!-- ========== 第8页：图编排进阶 ========== -->
+<section class="slide" data-index="7">
+  <div class="slide-content">
+    <div class="section-num anim">STAGE 2 · ADVANCED</div>
+    <div class="section-title anim d1">真实业务需要<span class="hl">三种进阶结构</span></div>
+    <div class="adv-grid">
+      <div class="adv-card anim d1">
+        <div class="adv-icon">🔀</div>
+        <h3>条件分支</h3>
+        <div class="adv-diagram">
+          <div class="mini-flow" style="--mc:#ffd700">
+            <span class="mini-node branch">判断</span><span class="mini-arrow">→</span>
+            <span class="mini-node" style="--mc:#00d4ff">读日历</span>
+          </div>
+        </div>
+        <p>按前置条件决定走哪条边，无会议就跳过该节点，节省调用和时间</p>
+        <div class="adv-case">📌 本周无会议 → 跳过读日历，直接汇总邮件和文档</div>
+      </div>
+      <div class="adv-card anim d2">
+        <div class="adv-icon">🔁</div>
+        <h3>循环与重试</h3>
+        <div class="adv-diagram">
+          <div class="mini-flow" style="--mc:#ff8c00">
+            <span class="mini-node">起草</span><span class="mini-arrow">→</span>
+            <span class="mini-node loop">自检</span><span class="mini-arrow dash">↺</span>
+          </div>
+        </div>
+        <p>自检不合格就带着反馈回到上游，设最大循环次数防止死循环</p>
+        <div class="adv-case">📌 周报格式或遗漏不合格 → 带反馈重新起草，最多3次</div>
+      </div>
+      <div class="adv-card anim d3">
+        <div class="adv-icon">🛤️</div>
+        <h3>动态路由</h3>
+        <div class="adv-diagram">
+          <div class="mini-flow" style="--mc:#a855f7">
+            <span class="mini-node route">路由</span><span class="mini-arrow">→</span>
+            <span class="mini-node" style="--mc:#00ff88">审批</span>
+          </div>
+        </div>
+        <p>节点执行完根据结果决定下一跳，运行时决策，不写死在图里</p>
+        <div class="adv-case">📌 发现需领导审批 → 路由到审批分支，通过后再发送</div>
+      </div>
+    </div>
+    <div class="conclusion-box anim d4">DAG + 条件分支 + 循环重试 + 动态路由 = Agent编排的完整表达力（LangGraph的本质）</div>
+  </div>
+  <div class="page-num">08 / 12</div>
+</section>
+
+<!-- ========== 第9页：阶段三 记忆存储 ========== -->
+<section class="slide" data-index="8">
+  <div class="slide-content">
+    <div class="section-num anim">STAGE 3 · MEMORY</div>
+    <div class="section-title anim d1">阶段三：<span class="hl">记忆存储</span></div>
+    <div class="memory-layout">
+      <div class="memory-col">
+        <div class="memory-card short anim d1">
+          <h3>⚡ 短期记忆</h3>
+          <div class="meta">存储位置：当前上下文 · 生命周期：单次任务</div>
+          <p>当前任务的执行状态：已读取的邮件、进行中的节点、中间结果。任务结束即清空</p>
+        </div>
+        <div class="memory-card long anim d2">
+          <h3>💾 长期记忆</h3>
+          <div class="meta">存储位置：向量数据库 · 生命周期：跨会话持久</div>
+          <p>Agent个性化的关键。任务开始时按当前情境召回相关记忆，注入上下文</p>
+          <div class="mem-type-row">
+            <div class="mem-type"><span class="mt-icon">🎚️</span><span class="mt-name">用户偏好</span><span class="mt-desc">周报格式·发送时间</span></div>
+            <div class="mem-type"><span class="mt-icon">🗂️</span><span class="mt-name">任务历史</span><span class="mt-desc">上几期写了什么</span></div>
+            <div class="mem-type"><span class="mt-icon">📚</span><span class="mt-name">领域知识</span><span class="mt-desc">项目成员分工</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="memory-col">
+        <div class="recall-filter anim d3">
+          <h4>🔍 召回过滤：噪声是记忆系统的头号敌人</h4>
+          <div class="filter-chips">
+            <div class="filter-chip">⏳ 时间衰减<br><span style="font-weight:400;color:var(--text-dim)">旧记忆降权</span></div>
+            <div class="filter-chip">⭐ 重要性打分<br><span style="font-weight:400;color:var(--text-dim)">确认过的加权</span></div>
+            <div class="filter-chip">🎯 情境匹配<br><span style="font-weight:400;color:var(--text-dim)">向量相似召回</span></div>
+          </div>
+        </div>
+        <div class="memory-card anim d4" style="border-left:4px solid var(--yellow)">
+          <h3>💡 呼应上期</h3>
+          <p>记忆决定召回什么，上下文决定拼接什么。Agent的记忆层就是上期讲的「策略层」：它向下调用向量库召回，向上为图编排里的起草节点提供个性化输入</p>
+        </div>
+        <div class="conclusion-box anim d5" style="margin-top:0">召回太多，噪声淹没信号；召回太少，关键信息缺失</div>
+      </div>
+    </div>
+  </div>
+  <div class="page-num">09 / 12</div>
+</section>
+
+<!-- ========== 第10页：完整案例 自动周报 ========== -->
+<section class="slide" data-index="9">
+  <div class="slide-content">
+    <div class="section-num anim">FULL PIPELINE</div>
+    <div class="section-title anim d1">完整案例：周五下午五点的<span class="hl">自动周报</span></div>
+    <div class="timeline">
+      <div class="tl-row anim d1">
+        <div class="tl-dot" style="--tc:#a855f7">🎯</div>
+        <div class="tl-body"><span class="tl-step" style="--tc:#a855f7">① 触发</span><span class="tl-text">周五17:00调度器触发，图编排启动</span></div>
+      </div>
+      <div class="tl-row anim d2">
+        <div class="tl-dot" style="--tc:#00d4ff">⚡</div>
+        <div class="tl-body"><span class="tl-step" style="--tc:#00d4ff">② 并行采集</span><span class="tl-text">读邮件 / 读日历 / 读文档 <span class="tl-hl-g">三个原子并行执行</span></span></div>
+      </div>
+      <div class="tl-row anim d3">
+        <div class="tl-dot" style="--tc:#ff8c00">🔗</div>
+        <div class="tl-body"><span class="tl-step" style="--tc:#ff8c00">③ 汇总</span><span class="tl-text">汇总要点原子把三路数据合并成<span class="tl-hl">事件列表</span></span></div>
+      </div>
+      <div class="tl-row anim d4">
+        <div class="tl-dot" style="--tc:#00ff88">🧠</div>
+        <div class="tl-body"><span class="tl-step" style="--tc:#00ff88">④ 记忆召回</span><span class="tl-text">从向量库查出<span class="tl-hl-g">格式偏好</span>：按项目分组、不超500字，以及上周周报内容</span></div>
+      </div>
+      <div class="tl-row anim d5">
+        <div class="tl-dot" style="--tc:#ffd700">✍️</div>
+        <div class="tl-body"><span class="tl-step" style="--tc:#ffd700">⑤ 起草+自检</span><span class="tl-text">起草周报 → 自检循环检查遗漏和格式，<span class="tl-hl">最多3次</span></span></div>
+      </div>
+      <div class="tl-row anim d6">
+        <div class="tl-dot" style="--tc:#a855f7">📤</div>
+        <div class="tl-body"><span class="tl-step" style="--tc:#a855f7">⑥ 审批+发送</span><span class="tl-text">条件分支：草稿发给用户<span class="tl-hl-g">等审批</span> → 发送邮件 → 本期周报<span class="tl-hl">写回长期记忆</span>。全程只点一次确认</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="page-num">10 / 12</div>
+</section>
+
+<!-- ========== 第11页：领域迁移矩阵 ========== -->
+<section class="slide" data-index="10">
+  <div class="slide-content">
+    <div class="section-num anim">TRANSFER</div>
+    <div class="section-title anim d1">同一套方法论，<span class="hl">迁移到任何领域</span></div>
+    <table class="matrix-table anim d1">
+      <thead>
+        <tr><th>领域</th><th>原子集</th><th>图编排</th><th>记忆存储</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>💻 编程Agent</td>
+          <td><span class="cell-hl">读文件 · 改代码 · 跑测试</span></td>
+          <td><span class="cell-hl2">生成 → 验证 → 修复 循环</span></td>
+          <td><span class="cell-hl3">项目结构 · 编码风格</span></td>
+        </tr>
+        <tr>
+          <td>🎧 客服Agent</td>
+          <td><span class="cell-hl">查订单 · 查物流 · 发起退款</span></td>
+          <td><span class="cell-hl2">意图识别 + 分支路由</span></td>
+          <td><span class="cell-hl3">用户历史工单</span></td>
+        </tr>
+        <tr>
+          <td>📊 数据Agent</td>
+          <td><span class="cell-hl">查表 · 写SQL · 画图</span></td>
+          <td><span class="cell-hl2">假设 → 验证 → 修正 循环</span></td>
+          <td><span class="cell-hl3">业务指标口径</span></td>
+        </tr>
+        <tr>
+          <td>🏢 办公Agent</td>
+          <td><span class="cell-hl">邮件 · 日历 · 文档读写</span></td>
+          <td><span class="cell-hl2">并行采集 + 自检 + 审批</span></td>
+          <td><span class="cell-hl3">格式偏好 · 任务历史</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="balance-note anim d3">
+      <span>任务越结构化，<span class="bn-hl">编排占比越重</span>；任务越开放，<span class="bn-hl">模型自主越重</span></span>
+      <div class="balance-slider">
+        <span class="bs-end">结构化</span>
+        <div class="bs-track"><div class="bs-knob"></div></div>
+        <span class="bs-end2">开放</span>
+      </div>
+    </div>
+  </div>
+  <div class="page-num">11 / 12</div>
+</section>
+
+<!-- ========== 第12页：结尾 ========== -->
+<section class="slide fullscreen-slide" data-index="11">
+  <canvas class="fullscreen-canvas" id="outroCanvas"></canvas>
+  <div class="fullscreen-content">
+    <div class="outro-title">三步造出一个靠谱的Agent</div>
+    <div class="outro-subtitle">🧩 原子集定边界 · 🕸️ 图编排定质量 · 🧠 记忆定个性</div>
+    <div class="pipeline-pill">
+      <span class="pp">并行采集</span><span class="sep">·</span>
+      <span class="pp">记忆召回</span><span class="sep">·</span>
+      <span class="pp">自检循环</span><span class="sep">·</span>
+      <span class="pp">审批分支</span>
+    </div>
+    <div style="margin-top:40px;font-size:1.7rem;color:#00ff88;font-weight:800;letter-spacing:4px;opacity:0" id="outroFollow">关注 Tao 同学</div>
+    <div class="outro-github">GitHub · knowledge-sharing/ 目录 · 本期网页已开源</div>
+    <div class="outro-next">下期预告 · 敬请期待</div>
+  </div>
+  <div class="page-num">12 / 12</div>
+</section>
+
+</div>
+</div>
+
+<script>
+const slides = document.querySelectorAll('.slide');
+let current = 0;
+
+function goToSlide(i){
+  if(i < 0 || i >= slides.length || i === current) return;
+  slides[current].classList.remove('active');
+  current = i;
+  const s = slides[current];
+  // 强制重排以重新触发CSS动画
+  s.querySelectorAll('.anim,.anim-pop').forEach(el=>{
+    el.style.animation='none';
+    void el.offsetWidth;
+    el.style.animation='';
+  });
+  s.classList.add('active');
+  if(s.dataset.index === '0') startParticles(introCanvas);
+  if(s.dataset.index === '11') startParticles(outroCanvas);
+}
+window.goToSlide = goToSlide;
+
+// 键盘控制（调试用）
+document.addEventListener('keydown', e=>{
+  if(e.key==='ArrowRight'||e.key===' ') goToSlide(current+1);
+  if(e.key==='ArrowLeft') goToSlide(current-1);
+});
+
+// 自适应缩放
+function fit(){
+  const stage = document.getElementById('stage');
+  const scale = Math.min(window.innerWidth/1920, window.innerHeight/1080);
+  stage.style.transform = `scale(${scale})`;
+}
+window.addEventListener('resize', fit);
+fit();
+
+// 粒子背景
+const introCanvas = document.getElementById('introCanvas');
+const outroCanvas = document.getElementById('outroCanvas');
+let particleTimers = [];
+
+function spawnParticles(canvas, count){
+  const w = canvas.width = 1920, h = canvas.height = 1080;
+  const ctx = canvas.getContext('2d');
+  const colors = ['#00d4ff','#a855f7','#00ff88'];
+  for(let i=0;i<count;i++){
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const size = Math.random()*4+2;
+    p.style.width = size+'px';
+    p.style.height = size+'px';
+    p.style.left = Math.random()*100+'%';
+    p.style.top = (60+Math.random()*40)+'%';
+    p.style.background = colors[i%3];
+    p.style.boxShadow = `0 0 ${size*3}px ${colors[i%3]}`;
+    p.style.animationDuration = (Math.random()*5+5)+'s';
+    p.style.animationDelay = (Math.random()*4)+'s';
+    canvas.parentElement.appendChild(p);
+    particleTimers.push(p);
+  }
+}
+
+function startParticles(canvas){
+  if(canvas.dataset.started) return;
+  canvas.dataset.started = '1';
+  spawnParticles(canvas, 24);
+}
+
+// 初始页粒子
+startParticles(introCanvas);
+</script>
+</body>
+</html>

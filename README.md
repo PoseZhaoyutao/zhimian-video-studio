@@ -41,6 +41,7 @@
 | 2026-07-31 | RAG 全流程拆解 | [`knowledge-sharing/2026-07-31-rag-pipeline/index.html`](knowledge-sharing/2026-07-31-rag-pipeline/index.html) | 12 页分页式幻灯片，从幻觉诊断到六步流程，含向量化 4 步动画与重排序演示，配合 VoxCPM2 统一男声配音实现音画同步 |
 | 2026-07-31 | MCP 模型上下文协议 | [`knowledge-sharing/2026-07-31-mcp-protocol/index.html`](knowledge-sharing/2026-07-31-mcp-protocol/index.html) | 12 页分页式幻灯片，Tao 同学立场：MCP 是 AI 操作的必经之路。重点拆解 MCP 做什么（标准化连接 N×M→N+M 拓扑动画、动态发现脉冲演示、三层架构）与为什么重要（生态统一、工具复用、Agent 时代底座），含命令行方式对比两页与三原语解析，结尾引出下期 DAG 工具编排 |
 | 2026-08-01 | 上下文管理·记忆·KV Cache | [`knowledge-sharing/2026-08-01-context-memory-kvcache/index.html`](knowledge-sharing/2026-08-01-context-memory-kvcache/index.html) | 12 页分页式幻灯片，拆解 AI 理解用户的三层架构：记忆（策略层·召回）、上下文管理（调度层·拼接）、KV Cache（物理层·复用）。含数据流动画、KV 网格缓存演示、切换用户三层影响分析（上下文隔离、Cache 失效冷启动、项目状态重召）与四条工程设计原则 |
+| 2026-11-04 | Agent 落地全流程 | [`knowledge-sharing/2026-11-04-agent-applications/index.html`](knowledge-sharing/2026-11-04-agent-applications/index.html) | 12 页分页式幻灯片，三阶段拆解 Agent 落地主线：构建原子集（单一职责/幂等/错误结构化/粒度适中四原则）→ 图编排（DAG 并行流动图、条件分支/循环重试/动态路由）→ 记忆存储（短期/长期、召回过滤）。全程以办公软件自动周报为案例，含领域迁移矩阵与结构化-开放配比判断标准 |
 
 **使用方式**：
 
