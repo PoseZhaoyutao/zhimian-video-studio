@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>深度探讨：Agent调度之谜与大模型的未来走向</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#070a14; --bg2:#0d1228; --surface:#131838;
+  --cyan:#00d4ff; --purple:#a855f7; --green:#00ff88;
+  --yellow:#ffd700; --red:#ff4d6d; --orange:#ff8c00; --blue:#4d7cff;
+  --text:#dfe6f5; --text-dim:#8892b0; --text-bright:#fff;
+  --border:rgba(0,212,255,0.18);
+}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Segoe UI','Microsoft YaHei',system-ui,sans-serif}
+.viewport{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.slide-stage{width:1920px;height:1080px;position:relative;transform-origin:center center;flex-shrink:0}
+.slide{position:absolute;inset:0;width:1920px;height:1080px;opacity:0;visibility:hidden;transition:opacity .5s ease,visibility .5s;overflow:hidden}
+.slide.active{opacity:1;visibility:visible;z-index:2}
+.slide-content{width:100%;height:100%;position:relative;padding:56px 96px;display:flex;flex-direction:column;z-index:2}
+.page-num{position:absolute;bottom:28px;right:50px;font-size:1rem;color:var(--text-dim);font-family:Consolas,monospace;letter-spacing:2px;z-index:10;opacity:.6}
+.section-num{font-size:1.05rem;color:var(--cyan);font-weight:600;letter-spacing:3px;text-transform:uppercase}
+.section-title{font-size:3.8rem;font-weight:800;color:var(--text-bright);margin:8px 0 12px;line-height:1.15;text-shadow:0 0 30px rgba(0,212,255,.35)}
+.section-title .hl{color:var(--cyan)}
+.section-title .hlp{color:var(--purple)}
+.section-subtitle{font-size:1.35rem;color:var(--text-dim);max-width:1560px}
+
+/* 背景光效层（独立元素，不与.anim冲突） */
+.bg-orbs{position:absolute;inset:0;overflow:hidden;z-index:0;pointer-events:none}
+.orb{position:absolute;border-radius:50%;filter:blur(90px);opacity:.28}
+.orb.o1{width:560px;height:560px;background:#0e4a66;top:-180px;left:-120px;animation:drift1 16s ease-in-out infinite}
+.orb.o2{width:480px;height:480px;background:#3b1a6e;bottom:-160px;right:-100px;animation:drift2 19s ease-in-out infinite}
+.orb.o3{width:360px;height:360px;background:#0a3d2c;bottom:-120px;left:34%;animation:drift3 23s ease-in-out infinite}
+@keyframes drift1{0%,100%{transform:translate(0,0)}50%{transform:translate(90px,60px)}}
+@keyframes drift2{0%,100%{transform:translate(0,0)}50%{transform:translate(-80px,-50px)}}
+@keyframes drift3{0%,100%{transform:translate(0,0)}50%{transform:translate(60px,-70px)}}
+.grid-bg{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.35;
+  background-image:linear-gradient(rgba(0,212,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.05) 1px,transparent 1px);
+  background-size:64px 64px;}
+
+/* 激活触发的入场动画 */
+.slide .anim{opacity:0}
+.slide.active .anim{animation:fadeUp .7s cubic-bezier(.34,1.56,.64,1) forwards}
+.slide.active .anim.d1{animation-delay:.15s}
+.slide.active .anim.d2{animation-delay:.35s}
+.slide.active .anim.d3{animation-delay:.55s}
+.slide.active .anim.d4{animation-delay:.75s}
+.slide.active .anim.d5{animation-delay:.95s}
+.slide.active .anim.d6{animation-delay:1.15s}
+.slide.active .anim.d7{animation-delay:1.35s}
+@keyframes fadeUp{from{opacity:0;transform:translateY(34px)}to{opacity:1;transform:translateY(0)}}
+@keyframes scaleIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+.slide.active .anim-pop{opacity:0;animation:scaleIn .7s cubic-bezier(.34,1.56,.64,1) forwards}
+.slide.active .anim-pop.d1{animation-delay:.2s}
+.slide.active .anim-pop.d2{animation-delay:.45s}
+.slide.active .anim-pop.d3{animation-delay:.7s}
+.slide.active .anim-pop.d4{animation-delay:.95s}
+.slide.active .anim-pop.d5{animation-delay:1.2s}
+
+/* 持续动画 */
+@keyframes titleGlow{0%,100%{text-shadow:0 0 30px rgba(0,212,255,.35)}50%{text-shadow:0 0 55px rgba(0,212,255,.75)}}
+.slide.active .section-title{animation:fadeUp .7s cubic-bezier(.34,1.56,.64,1) .15s forwards, titleGlow 3s ease-in-out 1.2s infinite}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.07);opacity:.8}}
+@keyframes flowDash{to{stroke-dashoffset:-40}}
+@keyframes floatY{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+@keyframes spinSlow{to{transform:rotate(360deg)}}
+@keyframes spinRev{to{transform:rotate(-360deg)}}
+@keyframes breathe{0%,100%{box-shadow:0 0 20px rgba(0,212,255,.15)}50%{box-shadow:0 0 55px rgba(0,212,255,.45)}}
+@keyframes glowLine{0%,100%{opacity:.35}50%{opacity:1}}
+
+/* 通用卡片 */
+.info-card{
+  background:linear-gradient(135deg,rgba(19,24,56,.8),rgba(13,18,40,.55));
+  border:1px solid var(--border);border-radius:16px;padding:24px 28px;
+  backdrop-filter:blur(10px);
+}
+.info-card h3{font-size:1.45rem;color:var(--text-bright);margin-bottom:8px}
+.info-card p{font-size:1.06rem;color:var(--text);line-height:1.7}
+.tag{display:inline-block;padding:4px 14px;border-radius:20px;font-size:.92rem;font-family:Consolas,monospace;border:1px solid var(--cyan);color:var(--cyan);background:rgba(0,212,255,.05)}
+
+/* 结论框 */
+.conclusion-box{
+  font-size:1.4rem;font-weight:700;color:var(--cyan);text-align:center;
+  padding:16px 34px;border:2px solid var(--cyan);border-radius:14px;
+  background:rgba(0,212,255,.05);margin:18px auto 0;max-width:1600px;line-height:1.5;
+}
+.conclusion-box.warn{color:var(--yellow);border-color:var(--yellow);background:rgba(255,215,0,.05)}
+.conclusion-box.purple{color:var(--purple);border-color:var(--purple);background:rgba(168,85,247,.06)}
+.slide.active .conclusion-box{opacity:0;animation:scaleIn .7s cubic-bezier(.34,1.56,.64,1) .9s forwards}
+
+/* ============ 开场/结尾 ============ */
+.fullscreen-slide .slide-content{padding:0;align-items:center;justify-content:center;text-align:center}
+.fullscreen-content{position:relative;z-index:2;text-align:center;top:50%;transform:translateY(-52%)}
+.intro-title,.outro-title{
+  font-size:5.4rem;font-weight:900;line-height:1.25;
+  background:linear-gradient(135deg,#00d4ff 0%,#a855f7 45%,#00ff88 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  opacity:0;transform:translateY(40px) scale(.9);
+}
+.slide.active .intro-title,.slide.active .outro-title{animation:titleIn 1s cubic-bezier(.34,1.56,.64,1) forwards}
+@keyframes titleIn{to{opacity:1;transform:translateY(0) scale(1)}}
+.intro-subtitle,.outro-subtitle{font-size:1.9rem;color:var(--text-dim);margin-top:24px;opacity:0}
+.slide.active .intro-subtitle{animation:fadeUp .8s ease .5s forwards}
+.slide.active .outro-subtitle{animation:fadeUp .8s ease .4s forwards}
+.pipeline-pill{
+  display:inline-flex;align-items:center;gap:18px;margin-top:40px;padding:15px 38px;
+  border:1px solid var(--border);border-radius:60px;background:rgba(19,24,56,.6);
+  font-size:1.45rem;font-weight:700;color:var(--text-bright);opacity:0;backdrop-filter:blur(8px);
+}
+.slide.active .pipeline-pill{animation:fadeUp .8s ease .8s forwards}
+.pipeline-pill .pp{color:var(--cyan)}
+.pipeline-pill .sep{color:var(--purple);font-size:1.7rem}
+.slide.active #introFollow{animation:followIn .8s ease 1.15s forwards}
+.slide.active #outroFollow{animation:followIn .8s ease 1.1s forwards}
+@keyframes followIn{to{opacity:1;text-shadow:0 0 30px rgba(0,255,136,.6)}}
+.follow-line{margin-top:34px;font-size:1.5rem;font-weight:700;color:var(--green);opacity:0;letter-spacing:1px}
+.github-line{
+  margin-top:22px;display:inline-block;padding:12px 30px;border:1px solid var(--green);
+  border-radius:12px;background:rgba(0,255,136,.06);color:var(--green);
+  font-family:Consolas,monospace;font-size:1.1rem;opacity:0;
+}
+.slide.active .github-line{animation:fadeUp .8s ease .95s forwards}
+.outro-next{margin-top:20px;font-size:1.25rem;color:var(--yellow);opacity:0;letter-spacing:2px}
+.slide.active .outro-next{animation:fadeUp .8s ease 1.2s forwards}
+
+/* 装饰粒子（开场/结尾） */
+.particle{position:absolute;border-radius:50%;background:var(--cyan);opacity:0;z-index:1}
+.slide.active .particle{animation:particleFloat 5s ease-in-out infinite}
+@keyframes particleFloat{0%{opacity:0;transform:translateY(0) scale(.6)}25%{opacity:.85}75%{opacity:.5}100%{opacity:0;transform:translateY(-160px) scale(1.1)}}
+.ring-deco{position:absolute;border:1px solid rgba(0,212,255,.16);border-radius:50%;z-index:0}
+.slide.active .ring-deco.r1{animation:ringPulse 4.5s ease-in-out infinite}
+.slide.active .ring-deco.r2{animation:ringPulse 4.5s ease-in-out 1.5s infinite}
+.slide.active .ring-deco.r3{animation:ringPulse 4.5s ease-in-out 3s infinite}
+@keyframes ringPulse{0%,100%{transform:scale(1);opacity:.5}50%{transform:scale(1.08);opacity:1}}
+
+/* ============ P2 自治谱系 ============ */
+.spectrum-wrap{flex:1;display:flex;flex-direction:column;justify-content:center;gap:30px}
+.spectrum-track{position:relative;height:150px;margin:0 20px}
+.spectrum-line{position:absolute;top:74px;left:0;right:0;height:4px;border-radius:2px;
+  background:linear-gradient(90deg,#2a3560 0%,var(--cyan) 40%,var(--purple) 75%,var(--green) 100%)}
+.spectrum-line::after{content:'';position:absolute;inset:0;border-radius:2px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.7),transparent);
+  background-size:200px 100%;background-repeat:no-repeat;animation:shimmer 2.6s linear infinite}
+@keyframes shimmer{0%{background-position:-200px 0}100%{background-position:calc(100% + 200px) 0}}
+.spec-node{position:absolute;top:0;width:250px;margin-left:-125px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.spec-dot{width:34px;height:34px;border-radius:50%;border:3px solid var(--c);background:#0d1228;position:relative;z-index:2}
+.slide.active .spec-dot{animation:specDotIn .6s cubic-bezier(.34,1.56,.64,1) forwards;opacity:0}
+@keyframes specDotIn{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:scale(1)}}
+.spec-node .sn-level{font-size:.95rem;color:var(--c);font-family:Consolas,monospace;letter-spacing:1px}
+.spec-node .sn-name{font-size:1.5rem;font-weight:800;color:var(--text-bright)}
+.spec-node .sn-desc{font-size:.98rem;color:var(--text-dim);text-align:center;line-height:1.5}
+.spec-node .sn-self{font-size:.85rem;color:var(--c);border:1px dashed var(--c);border-radius:14px;padding:2px 10px;margin-top:2px}
+.agent-formula{
+  display:flex;align-items:center;justify-content:center;gap:18px;
+  padding:20px;border-radius:16px;border:1px dashed var(--purple);
+  background:rgba(168,85,247,.07);font-size:1.5rem;font-weight:700;
+}
+.agent-formula .f{color:var(--text-bright)}
+.agent-formula .op{color:var(--purple);font-size:1.8rem}
+.agent-formula .f.c1{color:var(--cyan)}.agent-formula .f.c2{color:var(--green)}.agent-formula .f.c3{color:var(--yellow)}.agent-formula .f.c4{color:var(--orange)}
+.duo-note{display:flex;gap:22px}
+.duo-note .note-card{flex:1;background:rgba(19,24,56,.7);border:1px solid var(--border);border-radius:14px;padding:16px 24px;font-size:1.1rem;line-height:1.65;color:var(--text)}
+.duo-note .note-card b{color:var(--cyan)}
+.duo-note .note-card.warn b{color:var(--yellow)}
+
+/* ============ P3 大脑与算法 ============ */
+.brain-layout{flex:1;display:flex;gap:40px;align-items:stretch;margin-top:8px}
+.brain-panel{flex:1.1;position:relative;display:flex;align-items:center;justify-content:center}
+.brain-core{width:300px;height:300px;border-radius:50%;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 38% 32%,rgba(168,85,247,.5),rgba(0,212,255,.18) 62%,transparent);
+  border:2px solid rgba(168,85,247,.6);animation:breathe 3.2s ease-in-out infinite;z-index:2}
+.brain-core .bc-icon{font-size:3.6rem}
+.brain-core .bc-name{font-size:1.7rem;font-weight:900;color:#fff;margin-top:4px}
+.brain-core .bc-sub{font-size:.95rem;color:var(--cyan);font-family:Consolas,monospace;margin-top:4px}
+.orbit-ring{position:absolute;border-radius:50%;border:1px dashed rgba(0,212,255,.35)}
+.orbit-ring.r1{width:430px;height:430px;animation:spinSlow 22s linear infinite}
+.orbit-ring.r2{width:560px;height:560px;border-color:rgba(168,85,247,.3);animation:spinRev 30s linear infinite}
+.orbit-ring .sat{position:absolute;top:-13px;left:50%;width:26px;height:26px;margin-left:-13px;border-radius:50%;
+  background:var(--cyan);box-shadow:0 0 16px var(--cyan)}
+.orbit-ring.r2 .sat{background:var(--purple);box-shadow:0 0 16px var(--purple)}
+.brain-center-label{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:1.05rem;color:var(--text-dim);white-space:nowrap}
+.algo-panel{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:14px;align-content:center}
+.algo-chip{display:flex;align-items:center;gap:12px;padding:14px 18px;border-radius:12px;
+  background:rgba(19,24,56,.75);border:1px solid var(--border)}
+.algo-chip .ac-icon{font-size:1.6rem}
+.algo-chip .ac-body .ac-name{font-size:1.12rem;font-weight:700;color:var(--text-bright)}
+.algo-chip .ac-body .ac-desc{font-size:.9rem;color:var(--text-dim)}
+.mech-row{display:flex;gap:22px;margin-top:20px}
+.mech-card{flex:1;display:flex;gap:16px;align-items:flex-start;padding:18px 22px;border-radius:14px;
+  background:linear-gradient(135deg,rgba(19,24,56,.85),rgba(13,18,40,.6));border:1px solid var(--mc);position:relative;overflow:hidden}
+.mech-card::before{content:'';position:absolute;top:0;left:0;bottom:0;width:4px;background:var(--mc)}
+.mech-card .mc-num{font-size:2rem;font-weight:900;font-family:Consolas,monospace;color:var(--mc)}
+.mech-card .mc-body h3{font-size:1.3rem;color:var(--text-bright);margin-bottom:4px}
+.mech-card .mc-body p{font-size:1rem;color:var(--text);line-height:1.6}
+
+/* ============ P4 ReAct ============ */
+.react-layout{flex:1;display:flex;gap:44px;align-items:center;margin-top:6px}
+.react-loop{flex:1;position:relative;height:560px;display:flex;align-items:center;justify-content:center}
+.react-svg{position:absolute;inset:0;width:100%;height:100%}
+.react-svg circle.loop{fill:none;stroke:rgba(0,212,255,.4);stroke-width:2.5;stroke-dasharray:14 10;animation:flowDash 1.6s linear infinite}
+.react-svg circle.loopRing{fill:none;stroke:rgba(168,85,247,.15);stroke-width:22}
+.react-node{position:absolute;width:190px;padding:16px 14px;border-radius:16px;text-align:center;
+  background:linear-gradient(135deg,rgba(19,24,56,.92),rgba(13,18,40,.8));border:2px solid var(--nc);
+  box-shadow:0 0 24px rgba(0,0,0,.4);z-index:3}
+.react-node .rn-icon{font-size:2rem}
+.react-node .rn-name{font-size:1.3rem;font-weight:800;color:var(--text-bright);margin-top:4px}
+.react-node .rn-desc{font-size:.9rem;color:var(--text-dim);margin-top:4px;line-height:1.45}
+.react-loop .loop-badge{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;
+  font-family:Consolas,monospace;font-size:1.05rem;color:var(--cyan);opacity:.85;letter-spacing:2px}
+.pm-list{flex:1.15;display:flex;flex-direction:column;gap:16px}
+.pm-block{border-radius:16px;padding:20px 26px;border:1px solid var(--pb)}
+.pm-block.good{border-color:rgba(0,255,136,.45);background:rgba(0,255,136,.05)}
+.pm-block.bad{border-color:rgba(255,77,109,.45);background:rgba(255,77,109,.05)}
+.pm-block h3{font-size:1.35rem;margin-bottom:10px}
+.pm-block.good h3{color:var(--green)}
+.pm-block.bad h3{color:var(--red)}
+.pm-item{display:flex;gap:10px;font-size:1.06rem;color:var(--text);line-height:1.62;margin-bottom:6px}
+.pm-item .dot{color:var(--pb);font-weight:900}
+
+/* ============ P5 Planner-Executor ============ */
+.pe-layout{flex:1;display:flex;gap:44px;align-items:center;margin-top:6px}
+.pe-flow{flex:1;display:flex;flex-direction:column;align-items:center;gap:0;position:relative}
+.pe-node{width:520px;padding:16px 24px;border-radius:14px;text-align:center;position:relative;z-index:2;
+  background:linear-gradient(135deg,rgba(19,24,56,.92),rgba(13,18,40,.8));border:2px solid var(--nc)}
+.pe-node .pn-title{font-size:1.35rem;font-weight:800;color:var(--text-bright)}
+.pe-node .pn-sub{font-size:.95rem;color:var(--text-dim);margin-top:3px}
+.pe-node .pn-badge{position:absolute;top:-13px;right:14px;padding:2px 12px;border-radius:14px;font-size:.85rem;font-family:Consolas,monospace;background:var(--nc);color:#070a14;font-weight:700}
+.pe-arrow{height:52px;display:flex;align-items:center;justify-content:center}
+.pe-arrow svg{overflow:visible}
+.pe-arrow .arr-line{stroke:var(--cyan);stroke-width:2.5;stroke-dasharray:8 6;animation:flowDash 1.2s linear infinite}
+.pe-arrow .arr-head{fill:var(--cyan)}
+.pe-replan{position:absolute;right:-64px;top:150px;bottom:120px;width:200px;z-index:1}
+.pe-replan svg{overflow:visible}
+.pe-replan text{fill:var(--yellow);font-size:.98rem;font-family:'Microsoft YaHei'}
+.pe-right{flex:1.1;display:flex;flex-direction:column;gap:16px}
+.pe-adv{display:flex;gap:14px;align-items:flex-start;padding:16px 22px;border-radius:14px;
+  background:rgba(19,24,56,.75);border:1px solid var(--border)}
+.pe-adv .pa-icon{font-size:1.7rem}
+.pe-adv .pa-body h4{font-size:1.2rem;color:var(--text-bright);margin-bottom:3px}
+.pe-adv .pa-body p{font-size:.98rem;color:var(--text);line-height:1.55}
+.pe-cost{padding:16px 22px;border-radius:14px;border:1px dashed var(--yellow);background:rgba(255,215,0,.06);
+  font-size:1.05rem;color:var(--text);line-height:1.65}
+.pe-cost b{color:var(--yellow)}
+
+/* ============ P6 多智能体 ============ */
+.multi-layout{flex:1;display:flex;gap:44px;align-items:center;margin-top:4px}
+.multi-graph{flex:1;position:relative;height:560px}
+.multi-graph svg{position:absolute;inset:0;width:100%;height:100%}
+.multi-graph .mlink{stroke:rgba(0,212,255,.45);stroke-width:2;stroke-dasharray:8 7;animation:flowDash 1.4s linear infinite}
+.multi-graph .mlink.pl{stroke:rgba(168,85,247,.55)}
+.multi-graph .mlink.deb{stroke:rgba(255,215,0,.6);stroke-dasharray:4 6}
+.mnode{position:absolute;width:170px;padding:13px 10px;border-radius:14px;text-align:center;z-index:3;
+  background:linear-gradient(135deg,rgba(19,24,56,.95),rgba(13,18,40,.85));border:2px solid var(--nc)}
+.mnode .mn-icon{font-size:1.7rem}
+.mnode .mn-name{font-size:1.15rem;font-weight:800;color:var(--text-bright);margin-top:2px}
+.mnode .mn-role{font-size:.85rem;color:var(--text-dim)}
+.mnode.center{width:190px}
+.slide.active .mnode.center{animation:scaleIn .7s cubic-bezier(.34,1.56,.64,1) forwards, breathe 3s ease-in-out 1s infinite;opacity:0}
+.multi-right{flex:1.1;display:flex;flex-direction:column;gap:15px}
+.cost-card{display:flex;gap:14px;align-items:flex-start;padding:17px 22px;border-radius:14px;
+  background:rgba(19,24,56,.75);border:1px solid rgba(255,77,109,.4)}
+.cost-card .cc-icon{font-size:1.6rem}
+.cost-card .cc-body h4{font-size:1.18rem;color:var(--red);margin-bottom:3px}
+.cost-card .cc-body p{font-size:.98rem;color:var(--text);line-height:1.55}
+.lesson-strip{padding:15px 22px;border-radius:14px;border:1px dashed var(--yellow);background:rgba(255,215,0,.06);
+  font-size:1.04rem;color:var(--text);line-height:1.6}
+.lesson-strip b{color:var(--yellow)}
+
+/* ============ P7 之争提出 ============ */
+.vs-layout{flex:1;display:flex;flex-direction:column;justify-content:center;gap:26px}
+.vs-arena{display:flex;align-items:stretch;gap:0;position:relative}
+.vs-side{flex:1;padding:34px 40px;border-radius:22px;position:relative;overflow:hidden}
+.vs-side.e2e{background:linear-gradient(135deg,rgba(168,85,247,.14),rgba(168,85,247,.04));border:2px solid rgba(168,85,247,.6)}
+.vs-side.mod{background:linear-gradient(135deg,rgba(0,212,255,.13),rgba(0,212,255,.04));border:2px solid rgba(0,212,255,.6)}
+.vs-side .vs-camp{font-size:2.4rem;font-weight:900}
+.vs-side.e2e .vs-camp{color:var(--purple)}
+.vs-side.mod .vs-camp{color:var(--cyan)}
+.vs-side .vs-def{font-size:1.22rem;color:var(--text);line-height:1.75;margin-top:14px}
+.vs-side .vs-ana{margin-top:16px;font-size:1.05rem;color:var(--text-dim);line-height:1.6}
+.vs-side .vs-ana b{color:var(--yellow)}
+.vs-mid{width:150px;display:flex;align-items:center;justify-content:center;position:relative;z-index:3}
+.vs-badge{width:110px;height:110px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:2.4rem;font-weight:900;color:#fff;font-family:Consolas,monospace;
+  background:linear-gradient(135deg,#ff4d6d,#ff8c00);box-shadow:0 0 44px rgba(255,77,109,.55);
+  border:3px solid rgba(255,255,255,.25)}
+.slide.active .vs-badge{animation:scaleIn .8s cubic-bezier(.34,1.56,.64,1) .5s forwards, pulse 2.2s ease-in-out 1.4s infinite;opacity:0}
+.vs-bottom{display:flex;gap:22px}
+.vs-fact{flex:1;padding:16px 24px;border-radius:14px;background:rgba(19,24,56,.75);border:1px solid var(--border);
+  font-size:1.12rem;color:var(--text);line-height:1.65;text-align:center}
+.vs-fact b{color:var(--cyan)}
+
+/* ============ P8/P9 论据卡 ============ */
+.evo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;flex:1;margin-top:14px}
+.evo-grid.g4{grid-template-columns:repeat(2,1fr)}
+.evo-card{position:relative;border-radius:20px;padding:30px 32px;overflow:hidden;
+  background:linear-gradient(135deg,rgba(19,24,56,.85),rgba(13,18,40,.6));border:1px solid var(--ec)}
+.evo-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--ec),transparent)}
+.evo-card .ec-num{position:absolute;top:18px;right:24px;font-size:3.2rem;font-weight:900;font-family:Consolas,monospace;color:rgba(255,255,255,.06)}
+.evo-card .ec-icon{font-size:2.6rem;margin-bottom:14px;display:block}
+.evo-card h3{font-size:1.55rem;color:var(--text-bright);margin-bottom:10px}
+.evo-card p{font-size:1.08rem;color:var(--text);line-height:1.72}
+.evo-card .ec-evi{margin-top:14px;font-size:.95rem;font-family:Consolas,monospace;color:var(--ec)}
+.evo-card .ec-tag{position:absolute;bottom:18px;right:24px;font-size:.85rem;color:var(--ec);border:1px solid var(--ec);border-radius:14px;padding:2px 12px;font-family:Consolas,monospace}
+
+/* ============ P10 个人判断 ============ */
+.op-badge{display:inline-flex;align-items:center;gap:10px;padding:7px 20px;border-radius:24px;margin-top:4px;
+  border:1.5px solid var(--yellow);color:var(--yellow);font-size:1.05rem;font-weight:700;letter-spacing:1px;
+  background:rgba(255,215,0,.07)}
+.slide.active .op-badge{animation:fadeUp .7s ease .5s forwards;opacity:0}
+.judge-layout{flex:1;display:flex;gap:40px;margin-top:16px;align-items:stretch}
+.judge-left{flex:1;display:flex;flex-direction:column;gap:18px;justify-content:center}
+.judge-point{display:flex;gap:16px;align-items:flex-start;padding:18px 24px;border-radius:16px;
+  background:rgba(19,24,56,.78);border:1px solid var(--border)}
+.judge-point .jp-icon{font-size:1.8rem}
+.judge-point .jp-body h4{font-size:1.28rem;color:var(--text-bright);margin-bottom:4px}
+.judge-point .jp-body p{font-size:1.02rem;color:var(--text);line-height:1.62}
+.judge-right{flex:1;display:flex;flex-direction:column;gap:16px;justify-content:center}
+.os-table{border-radius:18px;border:1px solid rgba(168,85,247,.5);overflow:hidden;background:rgba(19,24,56,.8)}
+.os-table .os-head{display:flex;padding:13px 26px;background:rgba(168,85,247,.16);
+  font-size:1.1rem;font-weight:800;color:var(--purple);letter-spacing:1px}
+.os-row{display:flex;padding:11px 26px;border-top:1px solid rgba(168,85,247,.2);font-size:1.05rem}
+.os-row .os-a{width:44%;color:var(--text-bright);font-weight:700}
+.os-row .os-arrow{width:8%;color:var(--purple);text-align:center}
+.os-row .os-b{flex:1;color:var(--cyan)}
+.compete-row{display:flex;gap:16px}
+.compete-card{flex:1;padding:15px 20px;border-radius:14px;background:rgba(19,24,56,.78);border:1px solid var(--border)}
+.compete-card h4{font-size:1.15rem;color:var(--cyan);margin-bottom:5px}
+.compete-card p{font-size:.95rem;color:var(--text);line-height:1.5}
+
+/* ============ P11 趋势 ============ */
+.trend-list{flex:1;display:flex;flex-direction:column;gap:15px;margin-top:14px;justify-content:center}
+.trend-item{display:flex;gap:20px;align-items:center;padding:16px 26px;border-radius:16px;
+  background:linear-gradient(135deg,rgba(19,24,56,.82),rgba(13,18,40,.55));border:1px solid var(--border);position:relative;overflow:hidden}
+.trend-item::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,var(--cyan),var(--purple))}
+.trend-item .tr-num{font-size:2.6rem;font-weight:900;font-family:Consolas,monospace;flex-shrink:0;width:80px;
+  background:linear-gradient(135deg,var(--cyan),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.trend-item .tr-body{flex:1}
+.trend-item .tr-body h3{font-size:1.32rem;color:var(--text-bright);margin-bottom:3px}
+.trend-item .tr-body p{font-size:1rem;color:var(--text);line-height:1.55}
+.trend-item .tr-flag{flex-shrink:0;padding:5px 16px;border-radius:18px;font-size:.92rem;font-weight:700;font-family:Consolas,monospace}
+.trend-item .tr-flag.ev{color:var(--green);border:1px solid var(--green);background:rgba(0,255,136,.06)}
+.trend-item .tr-flag.sp{color:var(--yellow);border:1px dashed var(--yellow);background:rgba(255,215,0,.06)}
+
+/* ============ P12 结尾 ============ */
+.outro-quote{font-size:1.65rem;color:var(--text);max-width:1200px;margin:26px auto 0;line-height:1.8;opacity:0}
+.slide.active .outro-quote{animation:fadeUp .8s ease .6s forwards}
+.outro-quote b{color:var(--cyan)}
+</style>
+</head>
+<body>
+<div class="viewport">
+<div class="slide-stage" id="stage">
+
+<!-- ============ P1 开场 ============ -->
+<section class="slide fullscreen-slide active" id="s1">
+  <div class="bg-orbs"><div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div></div>
+  <div class="grid-bg"></div>
+  <div class="ring-deco r1" style="width:760px;height:760px;top:160px;left:580px"></div>
+  <div class="ring-deco r2" style="width:1040px;height:1040px;top:20px;left:440px"></div>
+  <div class="ring-deco r3" style="width:1360px;height:1360px;top:-140px;left:280px"></div>
+  <div class="particle" style="width:8px;height:8px;left:420px;top:760px"></div>
+  <div class="particle" style="width:5px;height:5px;left:640px;top:840px;animation-delay:1.2s"></div>
+  <div class="particle" style="width:10px;height:10px;left:1320px;top:820px;animation-delay:.6s"></div>
+  <div class="particle" style="width:6px;height:6px;left:1500px;top:720px;animation-delay:1.8s"></div>
+  <div class="particle" style="width:7px;height:7px;left:960px;top:900px;animation-delay:2.4s"></div>
+  <div class="fullscreen-content">
+    <div class="intro-title">Agent 调度之谜<br>与大模型的未来走向</div>
+    <div class="intro-subtitle">一期没有标准答案的深度探讨：端到端，还是模块化？</div>
+    <div class="pipeline-pill">
+      <span class="pp">Agent 本质</span><span class="sep">→</span>
+      <span class="pp">调度范式</span><span class="sep">→</span>
+      <span class="pp">路线之争</span><span class="sep">→</span>
+      <span class="pp">未来推演</span>
+    </div>
+    <div class="follow-line" id="introFollow">关注 Tao 同学 · 知识分享目录已在 GitHub 开源</div>
+  </div>
+  <div class="page-num">01 / 12</div>
+</section>
+
+<!-- ============ P2 Agent是什么：自治谱系 ============ -->
+<section class="slide" id="s2">
+  <div class="bg-orbs"><div class="orb o1"></div><div class="orb o2"></div></div>
+  <div class="grid-bg"></div>
+  <div class="slide-content">
+    <div class="section-num anim">Part 01 · 定义之争</div>
+    <div class="section-title">Agent 到底是什么？<span class="hl">一条自治程度谱系</span></div>
+    <div class="section-subtitle anim d1">市面定义很混乱，但按"自治程度"从左到右排列，一切就清晰了</div>
+    <div class="spectrum-wrap">
+      <div class="spectrum-track">
+        <div class="spectrum-line"></div>
+        <div class="spec-node" style="left:6%;--c:#4d7cff">
+          <div class="sn-level">L0 · 被动应答</div>
+          <div class="spec-dot" style="animation-delay:.3s"></div>
+          <div class="sn-name anim d1">Chatbot</div>
+          <div class="sn-desc anim d1">你问一句<br>它答一句</div>
+        </div>
+        <div class="spec-node" style="left:31%;--c:#00d4ff">
+          <div class="sn-level">L1 · 单点能力</div>
+          <div class="spec-dot" style="animation-delay:.5s"></div>
+          <div class="sn-name anim d2">工具调用</div>
+          <div class="sn-desc anim d2">能调计算器/搜索<br>但每步靠人触发</div>
+        </div>
+        <div class="spec-node" style="left:56%;--c:#a855f7">
+          <div class="sn-level">L2 · 固定流程</div>
+          <div class="spec-dot" style="animation-delay:.7s"></div>
+          <div class="sn-name anim d3">工作流编排</div>
+          <div class="sn-desc anim d3">人预设流程<br>模型在节点执行</div>
+        </div>
+        <div class="spec-node" style="left:83%;--c:#00ff88">
+          <div class="sn-level">L3 · 目标自治</div>
+          <div class="spec-dot" style="animation-delay:.9s"></div>
+          <div class="sn-name anim d4">自主智能体</div>
+          <div class="sn-desc anim d4">自拆解 · 自选工具<br>自评估 · 自重试</div>
+          <div class="sn-self anim d5" style="opacity:0">← 真正的 Agent</div>
+        </div>
+      </div>
+      <div class="agent-formula anim-pop d4">
+        <span class="f c1">Agent</span><span class="op">=</span>
+        <span class="f c2">大模型 LLM</span><span class="op">+</span>
+        <span class="f c3">规划 Planning</span><span class="op">+</span>
+        <span class="f c4">记忆 Memory</span><span class="op">+</span>
+        <span class="f">工具 Tools</span>
+      </div>
+      <div class="duo-note anim d5">
+        <div class="note-card"><b>关键事实：</b>公式四组件中，只有大模型是端到端训练的神经网络，其余三个（规划/记忆/工具）全部是<b>工程系统</b>。</div>
+        <div class="note-card warn"><b>这个细节正是后面所有争论的根源 —— 端到端 vs 模块化，争的就是这四个组件各自该长多大。</b></div>
+      </div>
+    </div>
+  </div>
+  <div class="page-num">02 / 12</div>
+</section>
+
+<!-- ============ P3 调度本质：大脑与算法 ============ -->
+<section class="slide" id="s3">
+  <div class="bg-orbs"><div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div></div>
+  <div class="slide-content">
+    <div class="section-num anim">Part 02 · 调度的本质</div>
+    <div class="section-title">LLM 是<span class="hlp">大脑</span>，经典算法是<span class="hl">手脚</span></div>
+    <div class="brain-layout">
+      <div class="brain-panel anim-pop d1">
+        <div class="orbit-ring r1"><div class="sat"></div></div>
+        <div class="orbit-ring r2"><div class="sat"></div></div>
+        <div class="brain-core">
+          <div class="bc-icon">🧠</div>
+          <div class="bc-name">大模型</div>
+          <div class="bc-sub">决策核心 · 调度中枢</div>
+        </div>
+        <div class="brain-center-label">它不执行任何算法，它只决定"下一步调谁"</div>
+      </div>
+      <div class="algo-panel anim d2">
+        <div class="algo-chip"><span class="ac-icon">🔍</span><div class="ac-body"><div class="ac-name">向量检索</div><div class="ac-desc">从百万文档中找相关</div></div></div>
+        <div class="algo-chip"><span class="ac-icon">📊</span><div class="ac-body"><div class="ac-name">排序模型</div><div class="ac-desc">精排与相关性打分</div></div></div>
+        <div class="algo-chip"><span class="ac-icon">🕸️</span><div class="ac-body"><div class="ac-name">图算法</div><div class="ac-desc">关系推理 / 最短路径</div></div></div>
+        <div class="algo-chip"><span class="ac-icon">🧮</span><div class="ac-body"><div class="ac-name">运筹优化</div><div class="ac-desc">排程 / 求解约束</div></div></div>
+        <div class="algo-chip"><span class="ac-icon">💻</span><div class="ac-body"><div class="ac-name">代码执行器</div><div class="ac-desc">精确计算与数据处理</div></div></div>
+        <div class="algo-chip"><span class="ac-icon">🎛️</span><div class="ac-body"><div class="ac-name">仿真引擎</div><div class="ac-desc">模拟验证后再行动</div></div></div>
+      </div>
+    </div>
+    <div class="mech-row anim d4">
+      <div class="mech-card" style="--mc:#00d4ff">
+        <div class="mc-num">①</div>
+        <div class="mc-body"><h3>路由 Routing</h3><p>判断该调用哪个能力，本质是一次分类决策</p></div>
+      </div>
+      <div class="mech-card" style="--mc:#a855f7">
+        <div class="mc-num">②</div>
+        <div class="mc-body"><h3>规划 Planning</h3><p>把复杂目标拆成任务树，确定步骤依赖关系</p></div>
+      </div>
+      <div class="mech-card" style="--mc:#00ff88">
+        <div class="mc-num">③</div>
+        <div class="mc-body"><h3>反思 Reflection</h3><p>评估结果是否靠谱，不靠谱就回溯重试</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="page-num">03 / 12</div>
+</section>
+
+<!-- ============ P4 范式一 ReAct ============ -->
+<section class="slide" id="s4">
+  <div class="bg-orbs"><div class="orb o1"></div><div class="orb o2"></div></div>
+  <div class="slide-content">
+    <div class="section-num anim">Part 03 · 范式一</div>
+    <div class="section-title">ReAct：<span class="hl">思考 → 行动 → 观察</span> 循环</div>
+    <div class="react-layout">
+      <div class="react-loop anim-pop d1">
+        <svg class="react-svg" viewBox="0 0 700 560">
+          <circle class="loopRing" cx="350" cy="280" r="200"/>
+          <circle class="loop" cx="350" cy="280" r="200"/>
+        </svg>
+        <div class="loop-badge">LOOP ⟳</div>
+        <div class="react-node" style="--nc:#a855f7;top:36px;left:50%;margin-left:-95px">
+          <div class="rn-icon">💭</div><div class="rn-name">思考 Thought</div>
+          <div class="rn-desc">"我要先查一下相关资料"</div>
+        </div>
+        <div class="react-node" style="--nc:#00d4ff;bottom:36px;right:10px">
+          <div class="rn-icon">⚡</div><div class="rn-name">行动 Action</div>
+          <div class="rn-desc">生成结构化调用<br>search("...")</div>
+        </div>
+        <div class="react-node" style="--nc:#00ff88;bottom:36px;left:10px">
+          <div class="rn-icon">👁️</div><div class="rn-name">观察 Observation</div>
+          <div class="rn-desc">工具结果<br>喂回上下文</div>
+        </div>
+      </div>
+      <div class="pm-list">
+        <div class="pm-block good anim d2">
+          <h3>✓ 三大优点</h3>
+          <div class="pm-item"><span class="dot">▸</span>结构极简：一个提示词模板就能跑起来</div>
+          <div class="pm-item"><span class="dot">▸</span>每步留痕：有完整推理链，出问题易排查</div>
+          <div class="pm-item"><span class="dot">▸</span>灵活探索：适合开放式小任务（查资料、写初稿）</div>
+        </div>
+        <div class="pm-block bad anim d3">
+          <h3>✗ 三大短板</h3>
+          <div class="pm-item"><span class="dot">▸</span>走一步看一步，缺全局规划，长任务易迷失</div>
+          <div class="pm-item"><span class="dot">▸</span>每圈完整调用一次大模型，20圈=20次推理成本</div>
+          <div class="pm-item"><span class="dot">▸</span>中间某步出错，错误沿上下文持续累积</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-num">04 / 12</div>
+</section>
+
+<!-- ============ P5 范式二 Planner-Executor ============ -->
+<section class="slide" id="s5">
+  <div class="bg-orbs"><div class="orb o1"></div><div class="orb o2"></div></div>
+  <div class="slide-content">
+    <div class="section-num anim">Part 04 · 范式二</div>
+    <div class="section-title">Planner–Executor：<span class="hlp">先画地图，再行军</span></div>
+    <div class="pe-layout">
+      <div class="pe-flow anim d1">
+        <div class="pe-node" style="--nc:#ffd700"><div class="pn-badge">INPUT</div><div class="pn-title">🎯 复杂目标</div><div class="pn-sub">"生成一份行业分析报告"</div></div>
+        <div class="pe-arrow"><svg width="60" height="52"><line class="arr-line" x1="30" y1="0" x2="30" y2="40"/><polygon class="arr-head" points="22,38 38,38 30,52"/></svg></div>
+        <div class="pe-node" style="--nc:#a855f7"><div class="pn-badge">强模型</div><div class="pn-title">🗺️ Planner 规划器</div><div class="pn-sub">一次输出完整计划：检索 → 分析 → 生成 → 校验</div></div>
+        <div class="pe-arrow"><svg width="60" height="52"><line class="arr-line" x1="30" y1="0" x2="30" y2="40"/><polygon class="arr-head" points="22,38 38,38 30,52"/></svg></div>
+        <div class="pe-node" style="--nc:#00d4ff"><div class="pn-badge">小模型/纯代码</div><div class="pn-title">⚙️ Executor 执行器</div><div class="pn-sub">逐步执行计划，便宜、快、可并行</div></div>
+        <div class="pe-arrow"><svg width="60" height="52"><line class="arr-line" x1="30" y1="0" x2="30" y2="40"/><polygon class="arr-head" points="22,38 38,38 30,52"/></svg></div>
+        <div class="pe-node" style="--nc:#00ff88"><div class="pn-badge">OUTPUT</div><div class="pn-title">📦 结果 + 可审计的计划文档</div><div class="pn-sub">计划偏了？触发重规划 Re-plan</div></div>
+        <div class="pe-replan">
+          <svg width="200" height="290" viewBox="0 0 200 290">
+            <path d="M 190 20 C 130 60, 130 220, 190 265" fill="none" stroke="#ffd700" stroke-width="2.5" stroke-dasharray="9 7" style="animation:flowDash 1.3s linear infinite"/>
+            <polygon points="183,255 197,262 186,272" fill="#ffd700"/>
+            <text x="6" y="150">执行偏差</text><text x="6" y="172">触发重规划</text>
+          </svg>
+        </div>
+      </div>
+      <div class="pe-right">
+        <div class="pe-adv anim d2"><span class="pa-icon">🌐</span><div class="pa-body"><h4>全局最优</h4><p>规划器看过全貌，不走一步看一步，不易迷失</p></div></div>
+        <div class="pe-adv anim d3"><span class="pa-icon">💰</span><div class="pa-body"><h4>成本可控</h4><p>贵的推理只发生在规划环节，重活交给便宜执行器</p></div></div>
+        <div class="pe-adv anim d4"><span class="pa-icon">📄</span><div class="pa-body"><h4>可审计可回滚</h4><p>计划本身是一份文档，工程上好做灰度与回滚</p></div></div>
+        <div class="pe-cost anim d5"><b>代价：</b>整个系统建立在规划器这张"地图"上——任务复杂到规划器自己都拆不清楚，全盘皆输。业界常用做法：<b>最强模型做规划 + 便宜模型做执行</b>。</div>
+      </div>
+    </div>
+  </div>
+  <div class="page-num">05 / 12</div>
+</section>
+
+<!-- ============ P6 范式三 多智能体 ============ -->
+<section class="slide" id="s6">
+  <div class="bg-orbs"><div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div></div>
+  <div class="slide-content">
+    <div class="section-num anim">Part 05 · 范式三</div>
+    <div class="section-title">多智能体协作：<span class="hl">分工、辩论与纠错</span></div>
+    <div class="multi-layout">
+      <div class="multi-graph anim d1">
+        <svg viewBox="0 0 760 560">
+          <line class="mlink pl" x1="380" y1="120" x2="150" y2="300"/>
+          <line class="mlink pl" x1="380" y1="120" x2="380" y2="310"/>
+          <line class="mlink pl" x1="380" y1="120" x2="610" y2="300"/>
+          <line class="mlink" x1="150" y1="300" x2="380" y2="480"/>
+          <line class="mlink" x1="380" y1="310" x2="380" y2="480"/>
+          <line class="mlink" x1="610" y1="300" x2="380" y2="480"/>
+          <line class="mlink deb" x1="150" y1="300" x2="610" y2="300"/>
+        </svg>
+        <div class="mnode center" style="--nc:#a855f7;top:60px;left:50%;margin-left:-95px">
+          <div class="mn-icon">🧑‍✈️</div><div class="mn-name">规划智能体</div><div class="mn-role">Orchestrator · 分派任务</div>
+        </div>
+        <div class="mnode" style="--nc:#00d4ff;top:270px;left:60px">
+          <div class="mn-icon">🔬</div><div class="mn-name">执行体 A</div><div class="mn-role">检索 / 调研</div>
+        </div>
+        <div class="mnode" style="--nc:#00d4ff;top:280px;left:295px">
+          <div class="mn-icon">💻</div><div class="mn-name">执行体 B</div><div class="mn-role">编码 / 计算</div>
+        </div>
+        <div class="mnode" style="--nc:#00d4ff;top:270px;left:530px">
+          <div class="mn-icon">✍️</div><div class="mn-name">执行体 C</div><div class="mn-role">写作 / 生成</div>
+        </div>
+        <div class="mnode" style="--nc:#00ff88;bottom:20px;left:50%;margin-left:-85px">
+          <div class="mn-icon">🛡️</div><div class="mn-name">校验智能体</div><div class="mn-role">挑错 · 验证结果</div>
+        </div>
+        <div style="position:absolute;top:292px;left:50%;transform:translateX(-50%);z-index:4;background:#0d1228;border:1px solid #ffd700;color:#ffd700;font-size:.88rem;padding:2px 12px;border-radius:12px;font-family:Consolas,monospace">⚡ A↔C 互相辩论攻击漏洞</div>
+      </div>
+      <div class="multi-right">
+        <div class="cost-card anim d2"><span class="cc-icon">📡</span><div class="cc-body"><h4>通信开销巨大</h4><p>智能体之间传递的信息爆炸式增长，token 成本数倍上升</p></div></div>
+        <div class="cost-card anim d3"><span class="cc-icon">🦠</span><div class="cc-body"><h4>错误会传染</h4><p>一个智能体的幻觉，可能被另一个当成事实继续放大</p></div></div>
+        <div class="cost-card anim d4"><span class="cc-icon">📉</span><div class="cc-body"><h4>收益常被高估</h4><p>很多场景下，一个足够强的单智能体 + 好工具，效果反而更好</p></div></div>
+        <div class="lesson-strip anim d5"><b>实践者教训（事实层面）：</b>"多智能体"不是银弹。上多智能体的正当理由只有两个——任务真的需要并行，或者需要独立视角互相纠错。</div>
+      </div>
+    </div>
+  </div>
+  <div class="page-num">06 / 12</div>
+</section>
+
+<!-- ============ P7 核心争论提出 ============ -->
+<section class="slide" id="s7">
+  <div class="bg-orbs"><div class="orb o1"></div><div class="orb o2"></div></div>
+  <div class="slide-content">
+    <div class="section-num anim">Part 06 · 核心争论</div>
+    <div class="section-title"><span class="hlp">端到端</span> 还是 <span class="hl">模块化</span>？</div>
+    <div class="vs-layout">
+      <div class="vs-arena">
+        <div class="vs-side e2e anim-pop d1">
+          <div class="vs-camp">端到端派</div>
+          <div class="vs-def">让一个大模型直接从<b>目标</b>生成<b>最终结果</b>——检索、排序、规划全部内化在模型参数与推理过程里，不再显式调用外部算法。</div>
+          <div class="vs-ana">类比历史：GPT 当年吞并了 NLP 的各个子任务<br>（翻译、摘要、分类曾是独立模型）</div>
+        </div>
+        <div class="vs-mid"><div class="vs-badge">VS</div></div>
+        <div class="vs-side mod anim-pop d2">
+          <div class="vs-camp">模块化派</div>
+          <div class="vs-def">承认大模型只负责<b>思考与决策</b>，具体能力交给专业算法：检索交给向量库、推荐交给排序模型、求解交给运筹引擎。</div>
+          <div class="vs-ana">模型是<b>调度员</b>，不是全能选手<br>—— 各司其职，组合成系统</div>
+        </div>
+      </div>
+      <div class="vs-bottom anim d3">
+        <div class="vs-fact">有意思的现象：<b>学术界的选择偏端到端</b>——追求能力上限与通用性</div>
+        <div class="vs-fact"><b>工业界的选择偏模块化</b>——追求可靠、可控、可负担</div>
+        <div class="vs-fact">两条路线几乎<b>相反</b>，为什么？看下一页的论据</div>
+      </div>
+    </div>
+  </div>
+  <div class="page-num">07 / 12</div>
+</section>
+
+<!-- ============ P8 端到端派论据 ============ -->
+<section class="slide" id="s8">
+  <div class="bg-orbs"><div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div></div>
+  <div class="slide-content">
+    <div class="section-num anim">Part 07 · 端到端派的三大论据</div>
+    <div class="section-title">"凡是能被数据描述的，<span class="hlp">终将被模型吞并</span>"</div>
+    <div class="evo-grid">
+      <div class="evo-card anim d1" style="--ec:#a855f7">
+        <div class="ec-num">01</div>
+        <span class="ec-icon">📈</span>
+        <h3>Scaling Law 缩放定律</h3>
+        <p>过去五年，模型每放大十倍，就涌现出原本需要专门算法才能实现的能力。数学推理、代码生成——都是先有专门系统，后被模型吞掉。</p>
+        <div class="ec-evi">历史证据：专业翻译模型 → 消失</div>
+      </div>
+      <div class="evo-card anim d2" style="--ec:#00d4ff">
+        <div class="ec-num">02</div>
+        <span class="ec-icon">🧠</span>
+        <h3>推理模型的崛起</h3>
+        <p>OpenAI o 系列、DeepSeek-R1 通过强化学习学会长链条思考：原本需要外部规划器才能完成的分解与回溯，现在模型内部就能完成。</p>
+        <div class="ec-evi">直接动摇 Planner 范式的根基</div>
+      </div>
+      <div class="evo-card anim d3" style="--ec:#00ff88">
+        <div class="ec-num">03</div>
+        <span class="ec-icon">🤖</span>
+        <h3>具身智能的信号</h3>
+        <p>机器人领域，感知-规划-控制三段式流水线正在被端到端 VLA 模型（视觉-语言-动作）取代——端到端训练消除了模块之间的信息损失。</p>
+        <div class="ec-evi">VLA: Vision-Language-Action</div>
+      </div>
+    </div>
+    <div class="conclusion-box anim d4">端到端派的结论：外部算法只是历史阶段的拐杖 —— 能力来自模型</div>
+  </div>
+  <div class="page-num">08 / 12</div>
+</section>
+
+<!-- ============ P9 模块化派论据 ============ -->
+<section class="slide" id="s9">
+  <div class="bg-orbs"><div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div></div>
+  <div class="slide-content">
+    <div class="section-num anim">Part 08 · 模块化派的四大论据</div>
+    <div class="section-title">"<span class="hl">模型负责智能，算法负责正确</span>"</div>
+    <div class="evo-grid g4">
+      <div class="evo-card anim d1" style="--ec:#00ff88">
+        <div class="ec-num">01</div>
+        <span class="ec-icon">✅</span>
+        <h3>可验证性</h3>
+        <p>模型的一百行推理过程无法证明它对；但一次数据库查询、一次最短路径计算，结果是可以证明的。金融、医疗、监管要的恰恰是"可验证"。</p>
+      </div>
+      <div class="evo-card anim d2" style="--ec:#ffd700">
+        <div class="ec-num">02</div>
+        <span class="ec-icon">💰</span>
+        <h3>成本与延迟</h3>
+        <p>端到端意味着每次决策都调用大模型；经典算法调用的成本可能只有它的万分之一。自动驾驶的教训：量产系统依然保留规则与约束层，因为安全必须可解释。</p>
+      </div>
+      <div class="evo-card anim d3" style="--ec:#00d4ff">
+        <div class="ec-num">03</div>
+        <span class="ec-icon">🧱</span>
+        <h3>数据的墙</h3>
+        <p>模型学不会训练集里不存在的东西：企业私有逻辑、实时库存与价格——必须通过外部工具实时获取，参数化不了。</p>
+      </div>
+      <div class="evo-card anim d4" style="--ec:#ff8c00">
+        <div class="ec-num">04</div>
+        <span class="ec-icon">🌪️</span>
+        <h3>组合爆炸</h3>
+        <p>真实业务是长尾的。你没有预算为每个场景收集训练数据，但你可以为每个场景写一条规则——规则的成本是线性的。</p>
+      </div>
+    </div>
+    <div class="conclusion-box anim d5">模块化派的结论：智能来自模型，正确来自工程 —— 两者缺一不可</div>
+  </div>
+  <div class="page-num">09 / 12</div>
+</section>
+
+<!-- ============ P10 我的判断 ============ -->
+<section class="slide" id="s10">
+  <div class="bg-orbs"><div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div></div>
+  <div class="slide-content">
+    <div class="section-num anim">Part 09 · 我的判断</div>
+    <div class="section-title">这不是二选一：<span class="hl">伪命题与分层</span></div>
+    <div class="op-badge anim d1">⚠ 以下为个人观点 · 非业界共识 · 标注为推测</div>
+    <div class="judge-layout">
+      <div class="judge-left">
+        <div class="judge-point anim d2">
+          <span class="jp-icon">🧩</span>
+          <div class="jp-body"><h4>两者回答的是不同维度的问题</h4>
+          <p>端到端回答"能力从哪来"——答案是模型；<br>模块化回答"系统怎么可靠"——答案是工程。<br><b style="color:#ffd700">它们不是对手，而是分层的。</b></p></div>
+        </div>
+        <div class="judge-point anim d3">
+          <span class="jp-icon">🖥️</span>
+          <div class="jp-body"><h4>个人假设："模型即操作系统"</h4>
+          <p>大模型 = 内核（调度与决策），经典算法 = 系统调用与驱动（稳定执行）。竞争焦点不在路线，而在"内核"与"接口"两层。</p></div>
+        </div>
+      </div>
+      <div class="judge-right">
+        <div class="os-table anim-pop d3">
+          <div class="os-head">🧠 模型即操作系统 —— 类比映射</div>
+          <div class="os-row"><div class="os-a">大模型</div><div class="os-arrow">↔</div><div class="os-b">操作系统内核（调度决策）</div></div>
+          <div class="os-row"><div class="os-a">经典算法</div><div class="os-arrow">↔</div><div class="os-b">系统调用 / 驱动程序</div></div>
+          <div class="os-row"><div class="os-a">上下文窗口</div><div class="os-arrow">↔</div><div class="os-b">内存 RAM</div></div>
+          <div class="os-row"><div class="os-a">外部记忆库</div><div class="os-arrow">↔</div><div class="os-b">硬盘 Disk</div></div>
+          <div class="os-row"><div class="os-a">工具 Tools</div><div class="os-arrow">↔</div><div class="os-b">外设 Peripherals</div></div>
+        </div>
+        <div class="compete-row anim d5">
+          <div class="compete-card"><h4>第一层：内核之争</h4><p>谁的模型推理更强、更便宜</p></div>
+          <div class="compete-card"><h4>第二层：接口之争</h4><p>谁的协议成为事实标准（MCP 等），如同当年的 USB</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="conclusion-box warn anim d6">假设是否成立，需要未来两三年验证 —— 明确标注：这是推测，欢迎用论据反驳</div>
+  </div>
+  <div class="page-num">10 / 12</div>
+</section>
+
+<!-- ============ P11 未来走向 ============ -->
+<section class="slide" id="s11">
+  <div class="bg-orbs"><div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div></div>
+  <div class="slide-content">
+    <div class="section-num anim">Part 10 · 未来三年推演</div>
+    <div class="section-title">顺着"模型即操作系统"<span class="hl">往下推</span></div>
+    <div class="trend-list">
+      <div class="trend-item anim d1">
+        <div class="tr-num">T1</div>
+        <div class="tr-body"><h3>上下文窗口 = 内存</h3><p>从几十万 token 向千万级演进：整个代码库、整份卷宗直接进工作记忆。检索的意义从"找信息"变成"管理注意力"</p></div>
+        <div class="tr-flag ev">已有证据</div>
+      </div>
+      <div class="trend-item anim d2">
+        <div class="tr-num">T2</div>
+        <div class="tr-body"><h3>工具调用成为模型的"母语"</h3><p>新一代模型在预训练阶段就用工具调用数据训练，调用算法与生成文本一样自然——模型与算法的边界越来越像进程与内核</p></div>
+        <div class="tr-flag ev">已有证据</div>
+      </div>
+      <div class="trend-item anim d3">
+        <div class="tr-num">T3</div>
+        <div class="tr-body"><h3>Agent 运行时（Agent OS）出现</h3><p>专门的 Agent 运行时负责权限管理、沙箱隔离、成本计量、审计日志——就像安卓之于 App</p></div>
+        <div class="tr-flag sp">个人推测</div>
+      </div>
+      <div class="trend-item anim d4">
+        <div class="tr-num">T4</div>
+        <div class="tr-body"><h3>价值向上迁移：数据层 + 评价层</h3><p>当所有人都能调用同样的模型，你的私有数据与验证体系才是别人拿不走的东西——这是对从业者最重要的一条</p></div>
+        <div class="tr-flag sp">个人推测</div>
+      </div>
+    </div>
+  </div>
+  <div class="page-num">11 / 12</div>
+</section>
+
+<!-- ============ P12 结尾 ============ -->
+<section class="slide fullscreen-slide" id="s12">
+  <div class="bg-orbs"><div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div></div>
+  <div class="grid-bg"></div>
+  <div class="ring-deco r1" style="width:820px;height:820px;top:130px;left:550px"></div>
+  <div class="ring-deco r2" style="width:1120px;height:1120px;top:-20px;left:400px"></div>
+  <div class="ring-deco r3" style="width:1420px;height:1420px;top:-170px;left:250px"></div>
+  <div class="particle" style="width:8px;height:8px;left:380px;top:780px"></div>
+  <div class="particle" style="width:6px;height:6px;left:700px;top:860px;animation-delay:1s"></div>
+  <div class="particle" style="width:10px;height:10px;left:1280px;top:840px;animation-delay:.5s"></div>
+  <div class="particle" style="width:6px;height:6px;left:1520px;top:700px;animation-delay:1.6s"></div>
+  <div class="particle" style="width:7px;height:7px;left:980px;top:920px;animation-delay:2.2s"></div>
+  <div class="fullscreen-content">
+    <div class="outro-title">智能来自模型<br>正确来自工程</div>
+    <div class="outro-subtitle">本期探讨总结 · Agent 调度之谜</div>
+    <div class="outro-quote">模型会越来越强，但系统的可靠性永远来自工程。<br><b>智能和正确是两条腿，缺了哪条都走不远。</b></div>
+    <div class="follow-line" id="outroFollow">关注 Tao 同学</div>
+    <div class="github-line">开源地址：github.com/PoseZhaoyutao/zhimian-video-studio → knowledge-sharing/</div>
+    <div class="outro-next">下期探讨：多模态 Agent —— 当模型长出眼睛和双手</div>
+  </div>
+  <div class="page-num">12 / 12</div>
+</section>
+
+</div>
+</div>
+
+<script>
+const slides = document.querySelectorAll('.slide');
+let current = 0;
+window.goToSlide = function(i){
+  if(i < 0 || i >= slides.length) return;
+  slides[current].classList.remove('active');
+  current = i;
+  slides[current].classList.add('active');
+};
+function fit(){
+  const s = Math.min(window.innerWidth/1920, window.innerHeight/1080);
+  document.getElementById('stage').style.transform = 'scale(' + s + ')';
+}
+window.addEventListener('resize', fit);
+fit();
+document.addEventListener('keydown', e=>{
+  if(e.key==='ArrowRight'||e.key===' ') window.goToSlide(current+1);
+  if(e.key==='ArrowLeft') window.goToSlide(current-1);
+});
+</script>
+</body>
+</html>
